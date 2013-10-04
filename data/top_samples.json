@@ -35,31 +35,37 @@
 	     {	
 		"dtag":"MC8TeV_QCDPt30to80",
 		"xsec":74330000,
+		"split":2,
 		"br":[0.0621]
 	     },
 	     {	
 		"dtag":"MC8TeV_QCDPt80to170",
 		"xsec":1191000,
+		"split":2,
 		"br":[0.1539]
 	     },
 	     {	
 		"dtag":"MC8TeV_QCDPt170to250",
 		"xsec":30990,
+		"split":2,
 		"br":[0.148]
 	     },
 	     {	
 		"dtag":"MC8TeV_QCDPt250to350",
 		"xsec":4250,
+		"split":2,
 		"br":[0.131]
 	     },
 	     {	
 		"dtag":"MC8TeV_QCDPt350toInf",
 		"xsec":810,
+		"split":2,
 		"br":[0.11]
 	     },
      	     {	
 		"dtag":"MC8TeV_QCDMuPt20toInf",
 		"xsec":364000000,
+		"split":2,
 		"br":[0.00037]
 	     },
    	     {	
@@ -189,22 +195,6 @@
               }
            ]
         },
-	{
-         "tag":"t#bar{t}",
-	 "issignal":true,
-         "isdata":false,
-         "color":"614",
-         "lcolor":1,
-	 "mctruthmode":1,
-         "data":[
-		{
- 	        "dtag":"MC8TeV_TTJetsFullLeptMGDecays",
-                "xsec":245.8,
-		"split":5,
-		"br":[0.10608049]
-                }
-   	   ]
-	},
         {
 	   "tag":"data",
 	   "isdata":true,

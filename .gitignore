@@ -5,6 +5,8 @@
 *.aux
 *.log
 *.pdf
+*.png
+*.root
 LSFJOB*
 # no python compiled files:
 *pyc
