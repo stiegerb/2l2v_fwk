@@ -118,19 +118,20 @@ def getNormalization(f,chan,tag):
     w_frac = n_corr / (n_data_plus+n_data_minus)
 
     print '-----------------------------------------------------'
-    print 'N+(MC)  : ',n_mc_plus,' +- ',n_mc_plus_err
-    print 'N-(MC)  : ',n_mc_minus,' +- ',n_mc_minus_err
-    print 'N+(data): ',n_data_plus,' +- ',n_data_plus_err
-    print 'N-(data): ',n_data_minus,' +- ',n_data_minus_err
-    print 'A (MC)  : ',a_mc,' +- ',a_mc_err
-    print 'A (data): ',a_data,' +- ',a_data_err
+    print 'N+(MC)  : %10.2f +- %5.2f' % (n_mc_plus, n_mc_plus_err)
+    print 'N-(MC)  : %10.2f +- %5.2f' % (n_mc_minus, n_mc_minus_err)
+    print 'N+(data): %10.0f +- %5.2f' % (n_data_plus, n_data_plus_err)
+    print 'N-(data): %10.0f +- %5.2f' % (n_data_minus, n_data_minus_err)
+    print 'A (MC)  :  %9.4f +- %6.4f' % (a_mc, a_mc_err)
+    print 'A (data):  %9.4f +- %6.4f' % (a_data, a_data_err)
     print '----------------------------------------------------'
-    print 'Ncorr   : ',n_corr,' +- ',n_corr_err
-    print 'Nuncorr :',n_uncorr,' +- ',n_uncorr_err
+    print 'Ncorr   : %10.2f +- %5.2f' % (n_corr, n_corr_err)
+    print 'Nuncorr : %10.2f +- %5.2f' % (n_uncorr, n_uncorr_err)
     print '----------------------------------------------------'
-    print 'W_sf    : ',w_sf,' +- ',w_sf_err
+    print 'W_sf    :  %9.4f +- %9.4f ' % (w_sf, w_sf_err)
     print '===================================================='
     print 'Fraction: ', w_frac
+    print '----------------------------------------------------'
 
     n_mc = [n_mc_plus, n_mc_minus, n_mc_plus_err, n_mc_minus_err]
     n_data = [n_data_plus, n_data_minus, n_data_plus_err, n_data_minus_err]
@@ -178,7 +179,7 @@ def main():
     (opt, args) = parser.parse_args()
 
     if opt.inputfile is None:
-        parser.error('No input fileectory defined!')
+        parser.error('No input file defined!')
 
     inputfile = opt.inputfile
     batch = opt.batch
@@ -188,13 +189,12 @@ def main():
         sys.argv.append( '-b' )
         ROOT.gROOT.SetBatch()
 
-
     sfs = {}
     i_file = mRF.openTFile(inputfile)
 
     channels = ['e','mu']
     print 'channels: ',channels
-    levels = set([k.split('_',1)[-1] for k in mRF.GetKeyNames(i_file,'data') if 'charge' in k and not 'chargeCheck' in k and not len(k.split('_')) == 2]) ## FIXME, changed notation from e_preselcharge to e_presel_charge
+    levels = set([k.split('_',1)[-1] for k in mRF.GetKeyNames(i_file,'data') if 'charge' in k and not 'chargeCheck' in k and not len(k.split('_')) == 2])
     print 'levels: ',levels
     for chan in channels:
         for level in levels:
@@ -202,6 +202,7 @@ def main():
             sfs[chan+'_'+level.replace('charge','')] = sf
 
     pprint(sfs)
+
     ## write weights to a root file
     sf_hist = TH1F('wjetssf','wjetssf',len(sfs),0,len(sfs))
     i=0
