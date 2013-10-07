@@ -218,7 +218,6 @@
          "isdata":false,
          "color":"822",
          "lcolor":1,
-         "mctruthmode":2,
          "data":[
             {
                "dtag":"MC8TeV_TTWJets",
