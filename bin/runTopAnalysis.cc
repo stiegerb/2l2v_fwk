@@ -526,7 +526,7 @@ int main(int argc, char* argv[])
 
 
 		//
-		// Event selection
+		// EVENT SELECTION
 		//
 		if(selLeptons.size()<1) continue; // Redundant??
 		controlHistos.fillHisto("evtflow",    ch, 0, weight);
@@ -546,13 +546,24 @@ int main(int argc, char* argv[])
 		//
 		std::vector<TString> ctrlCategs;
 		float wjetsWeight(1.0),qcdWeight(1.0),ibtagdyWeight(1.0);
-		// if(passSoftLeptonVeto && passJetSelection  )                       { ctrlCategs.push_back("");        }
 		if(passSoftLeptonVeto)                                             { ctrlCategs.push_back("presel_");         if(wjetsSFmap.find(chName+"_presel")!=wjetsSFmap.end())       wjetsWeight=wjetsSFmap[chName+"_presel"];}
 		if(passSoftLeptonVeto && selJets.size()==1 )                       { ctrlCategs.push_back("eq1jet_");         if(wjetsSFmap.find(chName+"_eq1jet")!=wjetsSFmap.end())       wjetsWeight=wjetsSFmap[chName+"_eq1jet"];}
 		if(passSoftLeptonVeto && pass3JetSelection && pass1BtagSelection)  { ctrlCategs.push_back("geq3jet1btag_");   if(wjetsSFmap.find(chName+"_geq3jet1btag")!=wjetsSFmap.end()) wjetsWeight=wjetsSFmap[chName+"_geq3jet1btag"];}
 		if(passSoftLeptonVeto && passJetSelection )                        { ctrlCategs.push_back("geq4jet_");        if(wjetsSFmap.find(chName+"_geq4jet")!=wjetsSFmap.end())      wjetsWeight=wjetsSFmap[chName+"_geq4jet"];}
 		if(passSoftLeptonVeto && passJetSelection  && passBtagSelection)   { ctrlCategs.push_back("btag_");           if(wjetsSFmap.find(chName+"_btag")!=wjetsSFmap.end())         wjetsWeight=wjetsSFmap[chName+"_btag"];}
 		if(passSoftLeptonVeto && passJetSelection  && passBtagVeto)        { ctrlCategs.push_back("bveto_");          if(wjetsSFmap.find(chName+"_bveto")!=wjetsSFmap.end())        wjetsWeight=wjetsSFmap[chName+"_bveto"];}
+
+		////////////////////////////////////////////////////////////////////////////
+		// SELECTION REGIONS
+		//
+		// presel_        : One lepton, zero veto leptons
+		// eq1jet_        : presel + exactly one jet
+		// geq3jet1btag_  : presel + three or more jets, one or more b-tags
+		// geq4jet_       : presel + four or more jets
+		// btag_          : presel + four or more jets, two or more b-tags
+		// bveto_         : presel + four or more jets, no b-tags
+		//
+		////////////////////////////////////////////////////////////////////////////
 
 		// fill different control distributions
 		float charge = 0;
