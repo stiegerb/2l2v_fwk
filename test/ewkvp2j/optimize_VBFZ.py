@@ -10,16 +10,18 @@ from ROOT import TFile, TGraph, TCanvas, TF1, TH1
 #default values
 shapeBased='1'
 #shapeName='dijet_deta_shapes'
-shapeName='LikelihoodD_shapes'
-#shapeName='Fisher_shapes'
-inUrl='/afs/cern.ch/user/p/psilva/www/FSQ-12-035/ll_19.6fbinv_ewkz.root'
+#shapeName='LikelihoodD_shapes'
+shapeName='Fisher_shapes'
+#inUrl='/afs/cern.ch/user/p/psilva/www/FSQ-12-035/ll_19.6fbinv_ewkz.root'
+inUrl='~/work/ewkzp2j_539/plotter.root'
 CWD=os.getcwd()
 phase=-1
 jsonUrl='/afs/cern.ch/user/p/psilva/work/CMSSW_5_3_11/src/UserCode/llvv_fwk/data/vbfz_samples.json'
 CMSSW_BASE=os.environ.get('CMSSW_BASE')
 sqrts='8'
-dyTemplates='/afs/cern.ch/user/p/psilva/www/FSQ-12-035/gamma_19.6fbinv_ewkz.root'
-smXsec=0.336
+#dyTemplates='/afs/cern.ch/user/p/psilva/www/FSQ-12-035/gamma_19.6fbinv_ewkz.root'
+dyTemplates='~/work/ewkzp2j_539/gamma_out.root'
+smXsec=1.0
 blind=False
 swDir='/src/UserCode/llvv_fwk/'
 
@@ -88,6 +90,7 @@ LandSArg+=' --systpostfix _%sTeV'%sqrts
 if(len(dyTemplates)>0) : LandSArg+=' --subDY '+dyTemplates
 #LandSArg +=' --bins mjjq016,mjjq033,mjjq049,mjjq066,mjjq083,mjjq092,mjjq100'
 LandSArg +=' --bins mjjq033,mjjq049,mjjq066,mjjq083,mjjq092,mjjq100'
+LandSArg +=' --addGammaNorm'
 
 DataCardsDir='cards%s'%(sqrts)
 
@@ -194,29 +197,29 @@ elif(phase == 2):
       BestXsec = []
       fileList = commands.getstatusoutput("ls " + OUT + "script_*.log")[1].split();           
       for f in fileList:
-         exp = commands.getstatusoutput("cat " + f + " | grep \"Best fit r: \"")[1];
-         sig = commands.getstatusoutput("cat " + f + " | grep -ir \"sig\"")[1]
+         exp = commands.getstatusoutput("cat " + f + " | grep -a \"Best fit r: \"")[1];
+         sig = commands.getstatusoutput("cat " + f + " | grep -ira \"sig\"")[1]
          if(len(exp)<=0):continue
          try:
             median = float(exp.split()[3])
             uncM = float(exp.split()[4].split('/')[0])
             uncP = float(exp.split()[4].split('/')[1])
             unc = (((median+uncP) + (median-uncM))/(2*median))-1
-            if(float(median)<=0.0):continue
+            if(float(median)<=0.001):continue
             index = int(f[f.rfind("_")+1:f.rfind(".log")])
             sigVal=sig.split(' ')[1];
-            ixsecReport="%7.3f @ index=%d %7.3fpb [%7.3f/%7.3f] pt1=%f pt2=%f sig=%f"%(float(100.0*unc),index,float(median*smXsec),100.0*uncM/median,100.0*uncP/median,cuts.GetBinContent(index,1),cuts.GetBinContent(index,2),float(sigVal))
+            ixsecReport="%f @ index=%d %fpb [%f/%f] pt1=%f pt2=%f mu=%f"%(float(sigVal),index,float(median*smXsec),100.0*uncM/median,100.0*uncP/median,cuts.GetBinContent(index,1),cuts.GetBinContent(index,2),float(median))
             BestXsec.append(ixsecReport)
          except:
             print 'Failed with %s'%exp
       #sort the limits for this mass
-      BestXsec.sort()
+      BestXsec.sort(reverse=True)
       for s in BestXsec:
          FILE.writelines(s+'\n')
          
    #all done
    FILE.close()
-   print("file "+fileName+".txt is written: it contains all selection points ordered by best cross section measurement")
+   print("file "+fileName+".txt is written: it contains all selection points ordered by significance")
 
 ######################################################################
 
@@ -240,7 +243,7 @@ elif(phase == 3 ):
    for c in cut_lines:
       if(len(c.split())<2): continue
       try :
-         print '%d)\t #%s \t %s \t %s \t %s'%(ictr,c.split()[2],c.split()[0],c.split()[6],c.split()[7])
+         print '%d)\t #%s \t %s \t %s \t %s'%(ictr,c.split()[2],c.split()[0],c.split()[5],c.split()[6])
       except:
          continue
       ictr+=1
@@ -249,8 +252,8 @@ elif(phase == 3 ):
    #save cut chosen
    opt = int(raw_input(">"))
    c=cut_lines[opt]
-   pt1Cut=float(c.split()[6].split('=')[1])
-   pt2Cut=float(c.split()[7].split('=')[1])
+   pt1Cut=float(c.split()[5].split('=')[1])
+   pt2Cut=float(c.split()[6].split('=')[1])
    optCuts="index="+str(opt).rjust(5) + " --> jet1>" + str(pt1Cut).rjust(5) + " jet2>" + str(pt2Cut).rjust(5)+"\n"
    print optCuts
    while True:

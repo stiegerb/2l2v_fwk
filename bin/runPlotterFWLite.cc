@@ -127,37 +127,53 @@ void GetListOfObject(JSONWrapper::Object& Root, std::string RootDir, std::list<N
       std::vector<JSONWrapper::Object> Process = Root["proc"].daughters();
       //loop on all Proc
       for(size_t ip=0; ip<Process.size(); ip++){
-          if(Process[ip]["isinvisible"].toBool())continue;
 	  bool isData (  Process[ip]["isdata"].toBool()  );
           bool isSign ( !isData &&  Process[ip].isTag("spimpose") && Process[ip]["spimpose"].toBool());
   	  bool isMC   = !isData && !isSign; 
 	  string filtExt("");
 	  if(Process[ip].isTag("mctruthmode") ) { char buf[255]; sprintf(buf,"_filt%d",(int)Process[ip]["mctruthmode"].toInt()); filtExt += buf; }
 
-          //just to make it faster, only consider the first 3 sample of a same kind
-          if(isData){if(dataProcessed>=1){continue;}else{dataProcessed++;}}
-          if(isSign){if(signProcessed>=2){continue;}else{signProcessed++;}}
-          if(isMC  ){if(bckgProcessed>0) {continue;}else{bckgProcessed++;}}
-
 	  std::vector<JSONWrapper::Object> Samples = (Process[ip])["data"].daughters();
           //to make it faster only consider the first samples 
 	  //for(size_t id=0; id<Samples.size()&&id<2; id++){
 	  for(size_t id=0; id<Samples.size(); id++){
 	      int split = Samples[id].getInt("split", 1);
-	      string segmentExt; if(split>1) { char buf[255]; sprintf(buf,"_%i",0); segmentExt += buf; }
-              string FileName = RootDir + Samples[id].getString("dtag", "") +  Samples[id].getString("suffix","") + segmentExt + filtExt + ".root";
-              printf("Adding all objects from %25s to the list of considered objects\n",  FileName.c_str());
-	      TFile* file = new TFile(FileName.c_str());
-	      if(file->IsZombie())
-		{
-		  if(isData) dataProcessed--;
-		  if(isSign) signProcessed--;
-		  if(isMC) bckgProcessed--;
-		}
-	      GetListOfObject(Root,RootDir,histlist,(TDirectory*)file,"" );
-	      file->Close();
+              for(int s=0; s<split; s++){
+ 	         string segmentExt; if(split>1) { char buf[255]; sprintf(buf,"_%i",s); segmentExt += buf; }
+                 string FileName = RootDir + Samples[id].getString("dtag", "") +  Samples[id].getString("suffix","") + segmentExt + filtExt + ".root";
+	         TFile* File = new TFile(FileName.c_str());
+                 bool& fileExist = FileExist[FileName];
+                 if(!File || File->IsZombie() || !File->IsOpen() || File->TestBit(TFile::kRecovered) ){
+                    fileExist=false;
+                    continue; 
+                 }else{
+                    fileExist=true;
+                 }
+
+                 //do the following only for the first file
+                 if(s>0)continue;
+
+                 printf("Adding all objects from %25s to the list of considered objects\n",  FileName.c_str());
+
+                 //just to make it faster, only consider the first 3 sample of a same kind
+                 if(isData){if(dataProcessed>=1){ File->Close(); continue;}else{dataProcessed++;}}
+                 if(isSign){if(signProcessed>=2){ File->Close(); continue;}else{signProcessed++;}}
+                 if(isMC  ){if(bckgProcessed>0) { File->Close(); continue;}else{bckgProcessed++;}}
+
+	         GetListOfObject(Root,RootDir,histlist,(TDirectory*)File,"" );
+	         File->Close();
+               }
 	    }
       }
+
+
+      printf("The list of missing or corrupted files, that are ignored, can be found below:\n");
+      for(std::unordered_map<string, bool>::iterator it = FileExist.begin(); it!=FileExist.end(); it++){
+         if(!it->second)printf("   %s\n", it->first.c_str());
+      }
+
+
+
       //for(std::list<NameAndType>::iterator it= histlist.begin(); it!= histlist.end(); it++){printf("%s\n",it->name.c_str()); }
       return;
    }
@@ -212,7 +228,7 @@ void SavingToFile(JSONWrapper::Object& Root, std::string RootDir, NameAndType Hi
            delete File;
          }
          if(!tmphist)continue;
-         tmphist->Scale(1.0/NFiles);
+         if(!Process[i]["isdata"].toBool())tmphist->Scale(1.0/NFiles);
          if(!hist){gROOT->cd(); hist = (TH1*)tmphist->Clone(tmphist->GetName());checkSumw2(hist);hist->Scale(Weight);}else{hist->Add(tmphist,Weight);}
          delete tmphist;
       }   
@@ -277,7 +293,7 @@ void Draw2DHistogramSplitCanvas(JSONWrapper::Object& Root, std::string RootDir, 
             delete File;
          }
          if(!tmphist)continue;
-         tmphist->Scale(1.0/NFiles);
+         if(!Process[i]["isdata"].toBool())tmphist->Scale(1.0/NFiles);
          if(!hist){gROOT->cd(); hist = (TH1*)tmphist->Clone(tmphist->GetName());checkSumw2(hist);hist->Scale(Weight);}else{hist->Add(tmphist,Weight);}
          delete tmphist;
       }   
@@ -376,7 +392,7 @@ void Draw2DHistogram(JSONWrapper::Object& Root, std::string RootDir, NameAndType
             delete File;
          }
          if(!tmphist)continue;
-         tmphist->Scale(1.0/NFiles);
+         if(!Process[i]["isdata"].toBool())tmphist->Scale(1.0/NFiles);
          if(!hist){gROOT->cd(); hist = (TH1*)tmphist->Clone(tmphist->GetName());checkSumw2(hist);hist->Scale(Weight);}else{hist->Add(tmphist,Weight);}
          delete tmphist;
       }   
@@ -452,12 +468,12 @@ void Draw1DHistogram(JSONWrapper::Object& Root, std::string RootDir, NameAndType
          int split = Samples[j].getInt("split", 1);
          TH1* tmphist = NULL;  int NFiles=0;
          for(int s=0;s<split;s++){
-	   string segmentExt; if(split>1) { char buf[255]; sprintf(buf,"_%i",s); segmentExt += buf; }
+           string segmentExt; if(split>1) { char buf[255]; sprintf(buf,"_%i",s); segmentExt += buf; }
 
 	    string FileName = RootDir + (Samples[j])["dtag"].toString() + Samples[j].getString("suffix", "") + segmentExt + filtExt + ".root";
             if(!FileExist[FileName]){continue;}
             TFile* File = new TFile(FileName.c_str());
-            if(!File || File->IsZombie() || !File->IsOpen() || File->TestBit(TFile::kRecovered) )continue;
+            if(!File || File->IsZombie() || !File->IsOpen() || File->TestBit(TFile::kRecovered) ){continue;}
             TH1* tmptmphist = NULL; 
             if(HistoProperties.isIndexPlot && cutIndex>=0){
                TH2* tmp2D = (TH2*) GetObjectFromPath(File,HistoProperties.name);
@@ -465,14 +481,15 @@ void Draw1DHistogram(JSONWrapper::Object& Root, std::string RootDir, NameAndType
             }else if(!HistoProperties.isIndexPlot){
                tmptmphist = (TH1*) GetObjectFromPath(File,HistoProperties.name);
 	    }
-	    if(!tmptmphist){delete File;continue;}
+	    if(!tmptmphist){delete File;  continue;}
+
             NFiles++;
             if(!tmphist){gROOT->cd(); tmphist = (TH1*)tmptmphist->Clone(tmptmphist->GetName());checkSumw2(tmphist);}else{tmphist->Add(tmptmphist);}
             delete tmptmphist;
             delete File;
          }
          if(!tmphist)continue;
-         tmphist->Scale(1.0/NFiles);
+         if(!Process[i]["isdata"].toBool()){tmphist->Scale(1.0/NFiles); }
          if(!hist){gROOT->cd(); hist = (TH1*)tmphist->Clone(tmphist->GetName());checkSumw2(hist);hist->Scale(Weight);}else{hist->Add(tmphist,Weight);}
          delete tmphist;
       }   
@@ -757,7 +774,7 @@ void ConvertToTex(JSONWrapper::Object& Root, std::string RootDir, NameAndType Hi
             delete File;
          }
          if(!tmphist)continue;
-         tmphist->Scale(1.0/NFiles);
+         if(!Process[i]["isdata"].toBool())tmphist->Scale(1.0/NFiles);
          if(!hist){gROOT->cd(); hist = (TH1*)tmphist->Clone(tmphist->GetName());checkSumw2(hist);hist->Scale(Weight);}else{hist->Add(tmphist,Weight);}
          delete tmphist;
       }

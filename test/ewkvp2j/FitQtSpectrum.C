@@ -16,8 +16,9 @@
 
 using namespace std;
 
+enum AnalysisMode {EWKVJJ, HZZ};
 enum MCMode      { ALL,   PUREG };
-void FitQtSpectrum(TString url="plotter.root", TString gUrl="plotter_gamma.root", int mcMode=PUREG);
+void FitQtSpectrum(TString url="plotter.root", TString gUrl="plotter_gamma.root", int mcMode=PUREG, int anMode=EWKVJJ);
 void printCMSheader(bool isSim);
 void printCategoryToPlot(TString title);
 TGraph *computeWeights(TH1F *target, TH1F *ctrl,TString name);
@@ -55,7 +56,17 @@ TGraph *computeWeights(TH1F *target, TH1F *ctrl,TString name)
 
   //smooth weights
   TGraphSmooth *gs = new TGraphSmooth(name+"smooth");
-  TGraph *smoothWgtGr=gs->SmoothSuper(ratioGr,"",3);
+  //  TGraph *smoothWgtGr=gs->SmoothSuper(ratioGr,"",3);
+  //  TGraph *smoothWgtGr=gs->SmoothLowess(ratioGr,"normal");
+  //TGraph *smoothWgtGr=gs->SmoothLowess(ratioGr,"normal");
+
+  Double_t xout[]={50,55,60,65,70,75,80,85,90,95,100,105,110,115,120,125,130,135,140,145,150,155,160,165,170,175,180,185,190,195,200,250,300};
+  Int_t nout=sizeof(xout)/sizeof(Double_t);
+  Double_t yout[nout];
+  for(Int_t ip=0; ip<nout; ip++){
+    yout[ip]=ratioGr->Eval(xout[ip]);
+  }
+  TGraph *smoothWgtGr=gs->Approx(ratioGr,"linear", nout, xout, 0, yout[nout-1],1);
   smoothWgtGr->SetName(name);
   smoothWgtGr->SetTitle(name);
   smoothWgtGr->SetFillColor(target->GetFillColor());
@@ -97,29 +108,32 @@ void printCMSheader(bool isSim)
 }
 
 //
-void FitQtSpectrum(TString url, TString gUrl, int mcMode)
+void FitQtSpectrum(TString url, TString gUrl, int mcMode, int catMode)
 {
   std::vector<int> colors, markers;
   std::vector<TString> categs,titles,mcg;
-  categs.push_back("mjjq016"); titles.push_back("M_{jj}<250");      colors.push_back(30); markers.push_back(20);
-  categs.push_back("mjjq033"); titles.push_back("250<M_{jj}<350");  colors.push_back(32); markers.push_back(24);
-  categs.push_back("mjjq049"); titles.push_back("350<M_{jj}<450");  colors.push_back(30); markers.push_back(24);
-  categs.push_back("mjjq066"); titles.push_back("450<M_{jj}<550");  colors.push_back(32); markers.push_back(20);
-  categs.push_back("mjjq083"); titles.push_back("550<M_{jj}<750");  colors.push_back(49); markers.push_back(20);
-  categs.push_back("mjjq092"); titles.push_back("750<M_{jj}<1000"); colors.push_back(46); markers.push_back(24);
-  categs.push_back("mjjq100"); titles.push_back("M_{jj}>1000");     colors.push_back(38); markers.push_back(24);
-  /*
-  categs.push_back("eq0jets");  titles.push_back("=0 jets");
-  categs.push_back("eq1jets");  titles.push_back("=1 jets");
-  categs.push_back("eq2jets");  titles.push_back("=2 jets");
-  categs.push_back("geq3jets"); titles.push_back("#geq 3 jets");
-  categs.push_back("vbf");      titles.push_back("VBF");
-  */
+  if(catMode==EWKVJJ){
+    cout << "[FitQtSpectrum] Adding mjj categories" << endl;
+    categs.push_back("mjjq016"); titles.push_back("M_{jj}<250");      colors.push_back(30); markers.push_back(20);
+    categs.push_back("mjjq033"); titles.push_back("250<M_{jj}<350");  colors.push_back(32); markers.push_back(24);
+    categs.push_back("mjjq049"); titles.push_back("350<M_{jj}<450");  colors.push_back(30); markers.push_back(24);
+    categs.push_back("mjjq066"); titles.push_back("450<M_{jj}<550");  colors.push_back(32); markers.push_back(20);
+    categs.push_back("mjjq083"); titles.push_back("550<M_{jj}<750");  colors.push_back(49); markers.push_back(20);
+    categs.push_back("mjjq092"); titles.push_back("750<M_{jj}<1000"); colors.push_back(46); markers.push_back(24);
+    categs.push_back("mjjq100"); titles.push_back("M_{jj}>1000");     colors.push_back(38); markers.push_back(24);
+  }
+  else{
+    cout << "[FitQtSpectrum] Adding jet-bin categories" << endl;
+    categs.push_back("eq0jets");  titles.push_back("=0 jets");      colors.push_back(30); markers.push_back(20);
+    categs.push_back("geq1jets");  titles.push_back("#geq1 jets");  colors.push_back(32); markers.push_back(24);
+    categs.push_back("vbf");      titles.push_back("VBF");          colors.push_back(30); markers.push_back(24); 
+  }
   const size_t ncategs=categs.size();
   
   //mc for closure
   if(mcMode!=PUREG)
     {
+      mcg.push_back("EWK #gammajj");
       mcg.push_back("V#gamma");
       mcg.push_back("Multijets");
     }
@@ -237,16 +251,20 @@ void FitQtSpectrum(TString url, TString gUrl, int mcMode)
 	  TGraph *eewgtGr=0,*mmwgtGr=0;
 	  if(eeqt) eewgtGr = computeWeights(eeqt,gqt,"ee"  +categs[icat]+"_qt_datafitwgts");
 	  if(mmqt) mmwgtGr = computeWeights(mmqt,gqt,"mumu"+categs[icat]+"_qt_datafitwgts");
-	  
+	  TH1 *eeratio=(TH1 *) eeqt->Clone("ee"+categs[icat]+"ratio"); eeratio->Divide(gqt);
+	  TH1 *mmratio=(TH1 *) mmqt->Clone("mm"+categs[icat]+"ratio"); mmratio->Divide(gqt);
+
 
 	  wc->cd();
 	  TPad *p=(TPad *) wc->cd(icat+1); 
 	  p->SetLogx();
 	  p->SetLogy();
 	  bool fill(false);
-	  TGraph *frame=mmwgtGr;
-	  if(eewgtGr)    { eewgtGr->Draw("al");                fill=true; eewgtGr->SetLineWidth(2); frame=eewgtGr; toSave.Add(eewgtGr); }
-	  if(mmwgtGr)    { mmwgtGr->Draw(fill ? "l" : "al");   fill=true; mmwgtGr->SetLineWidth(1);                toSave.Add(mmwgtGr); }
+	  //TGraph *frame=mmwgtGr;
+	  TH1 *frame=mmratio;
+	  if(eewgtGr)    {eeratio->Draw("e2"); eewgtGr->Draw("l");       fill=true; eewgtGr->SetLineColor(1); eewgtGr->SetLineWidth(2); frame=eeratio; toSave.Add(eewgtGr); eeratio->SetMarkerStyle(24); }
+	  if(mmwgtGr)    {mmratio->Draw(fill ? "e2same" : "e2");  mmwgtGr->Draw("l");  fill=true; mmwgtGr->SetLineColor(1); mmwgtGr->SetLineWidth(1);       toSave.Add(mmwgtGr); mmratio->SetMarkerStyle(20); }
+	
 	  if(fill)
 	    {
 	      frame->GetXaxis()->SetTitle("Transverse momentum [GeV]");

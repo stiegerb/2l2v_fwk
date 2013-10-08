@@ -36,6 +36,63 @@ using namespace std;
 
 typedef ROOT::Math::LorentzVector<ROOT::Math::PxPyPzE4D<double> >::BetaVector BetaVector;
 
+//
+bool passPhaseSpaceAcceptance(data::PhysicsObjectCollection_t &leptons, data::PhysicsObjectCollection_t &jets,bool isReco=false){
+  if(leptons.size()<2 || jets.size()<2) return false;
+
+  bool passLeptons(true);
+  LorentzVector sumL(0,0,0,0);
+  for(size_t i=0; i<2; i++){
+    float pt=leptons[i].pt();
+    float eta=leptons[i].eta();
+    sumL+=leptons[i]; 
+    if(isReco) passLeptons&=(fabs(eta)<2.5 && fabs(pt)>20); 
+    else       passLeptons&=(fabs(eta)<2.5 && fabs(pt)>15); 
+  }
+  bool passDilepton( fabs(sumL.mass()-91)<30 );
+  if(isReco) passDilepton=( fabs(sumL.mass()-91)<15);
+  
+  bool passJets(true);
+  LorentzVector sumJ(0,0,0,0);
+  for(size_t i=0; i<2; i++){
+    float pt=jets[i].pt();
+    float eta=jets[i].eta();
+    sumJ+=jets[i]; 
+    if(isReco) passJets&=(fabs(eta)<4.7 && fabs(pt)>30); 
+    else       passJets&=(fabs(eta)<5.0 && fabs(pt)>25); 
+  }
+  bool passDijet( sumJ.mass()>120 );
+  
+  //build the final result
+  //bool toReturn(passJets && passDijet);
+  //bool toReturn(passJets && passDijet && passLeptons);
+  bool toReturn(passJets && passDijet && passLeptons && passDilepton);
+  return toReturn;
+}
+
+
+//
+bool passGenAcceptance(data::PhysicsObjectCollection_t &gen,bool tauFilt=false){
+  
+  data::PhysicsObjectCollection_t jets,leptons;
+  for(size_t i=0; i<gen.size(); i++){
+    int status=gen[i].get("status");
+    if(status!=3) continue;
+    int pid=gen[i].get("id");
+    if(fabs(pid)<6)                    jets.push_back(gen[i]);
+    if(fabs(pid)==11 || fabs(pid)==13) leptons.push_back(gen[i]);
+  }
+
+  //select only ee or mumu events
+  if(tauFilt) return (leptons.size()==2);
+
+  //only last two quarks are outgoing
+  std::reverse(jets.begin(),jets.end());
+  return passPhaseSpaceAcceptance(leptons,jets);
+}
+
+
+
 
 //
 float getAngle(LorentzVector &a, LorentzVector &b)
@@ -224,6 +281,13 @@ int main(int argc, char* argv[])
   h->GetXaxis()->SetBinLabel(4, "#eta^{ll}<1.44");
   h->GetXaxis()->SetBinLabel(5,"#geq 2 jets"); 
 
+  h=mon.addHistogram( new TH1F ("psacceptance", ";;Events", 5,0,5) );
+  h->GetXaxis()->SetBinLabel(1,"Gen");
+  h->GetXaxis()->SetBinLabel(2,"Gen Acc");
+  h->GetXaxis()->SetBinLabel(3,"Rec Acc");
+  h->GetXaxis()->SetBinLabel(4,"Gen+Rec Acc");
+  h->GetXaxis()->SetBinLabel(5,"~Gen Acc+Rec Acc");
+
   mon.addHistogram( new TH1F("nup",";NUP;Events",10,0,10) );
   mon.addHistogram( new TH1F("nupfilt",";NUP;Events",10,0,10) );
 
@@ -298,13 +362,20 @@ int main(int argc, char* argv[])
   mon.addHistogram( new TH2F("njetsvsavginstlumi", ";Inst. luminosity;Jet multiplicity;Events",5,0,5,10,0,5000) );
   mon.addHistogram( new TH1F("vbfcandjeteta"     , ";Tag  jet #eta;Events x 2",                                 50,0,5) );
   mon.addHistogram( new TH1F("vbfcandjetpt"      , ";Tag jet p_{T} [GeV];Events x 2",                        50,0,500) );
-  mon.addHistogram( new TH1F("vbfcandjet1eta"    , ";Forward jet #eta;Events",                                 50,0,5) );
-  mon.addHistogram( new TH1F("vbfcandjet1pt"     , ";Leading jet p_{T} [GeV];Events",                        50,0,500) );
-  mon.addHistogram( new TH1F("vbfcandjet2eta"    , ";Central jet #eta;Events",                                 50,0,5) );
-  mon.addHistogram( new TH1F("vbfcandjet2pt"     , ";Trailer jet p_{T} [GeV];Events",                        50,0,500) );
+
+  //  Double_t jetptaxis[]={30.,40.,50.,60.,70.,80.,90.,100.,150.,200.,250.,300.,400.,500.,750.,1000.};
+  //Int_t nptBins=sizeof(jetptaxis)/sizeof(Double_t)-1;
+  //mon.addHistogram( new TH1F("vbfcandjet1pt"     , ";Leading jet p_{T} [GeV];Events",                        nptBins,jetptaxis) );
+  //mon.addHistogram( new TH1F("vbfcandjet2pt"     , ";Trailer jet p_{T} [GeV];Events",                        nptBins,jetptaxis) );
+
+  mon.addHistogram( new TH1F("vbfcandjet1pt"     , ";Leading jet p_{T} [GeV];Events",     50,0,1000) );
+  mon.addHistogram( new TH1F("vbfcandjet2pt"     , ";Trailer jet p_{T} [GeV];Events",     50,0,500) );
+
+  mon.addHistogram( new TH1F("vbfcandjet1eta"    , ";Forward jet #eta;Events",                                 25,0,5) );
+  mon.addHistogram( new TH1F("vbfcandjet2eta"    , ";Central jet #eta;Events",                                 25,0,5) );
   mon.addHistogram( new TH1F("vbfcandjetdeta"    , ";Dijet pseudo-rapidity distance (#Delta#eta);Events",   50,0,10) );  
   mon.addHistogram( new TH1F("vbfcandjetseta"    , ";#Sigma |#eta(j)|;Jets",                50,0,15) );  
-  mon.addHistogram( new TH1F("vbfcandjetetaprod" , ";#eta_{j1} x #eta_{j2};Events",       100,-25,25) );
+  mon.addHistogram( new TH1F("vbfcandjetetaprod" , ";#eta_{j1} x #eta_{j2};Events",       50,-25,25) );
   mon.addHistogram( new TH1F("vbfhardpt"         , ";Hard process p_{T} [GeV];Events",                   25,0,250) );
   mon.addHistogram( new TH1F("vbfspt"            , ";Relative balance (#Delta^{rel}_{p_{T}});Events",                   50,0,1) );
   h=mon.addHistogram( new TH1F("vbfcjv"          , ";Central jet count;Events",                     5,0,5) );
@@ -315,11 +386,11 @@ int main(int argc, char* argv[])
   h->GetXaxis()->SetBinLabel(5,"#geq 4 jets");
   mon.addHistogram( (TH1F *) h->Clone("vbfcjv15") );
   mon.addHistogram( (TH1F *) h->Clone("vbfcjv20") );
-  mon.addHistogram( new TH1F("vbfhtcjv15"          , ";H_{T}(p_{T}>15) [GeV];Events",25,0,250) );
-  mon.addHistogram( new TH1F("vbfhtcjv20"          , ";H_{T}(p_{T}>20) [GeV];Events",25,0,250) );
-  mon.addHistogram( new TH1F("vbfhtcjv"            , ";H_{T}(p_{T}>30) [GeV];Events",25,0,250) );
-  mon.addHistogram( new TH1F("vbfmaxcjvjpt"        , ";Third jet p_{T} [GeV];Events",25,0,100) );
-  mon.addHistogram( new TH1F("vbfystar3"           , ";y_{j3}-(y_{j1}+y_{j2})/2;Events",50,0,5) );
+  mon.addHistogram( new TH1F("vbfhtcjv15"          , ";H_{T}(p_{T}>15) [GeV];Events",10,0,250) );
+  mon.addHistogram( new TH1F("vbfhtcjv20"          , ";H_{T}(p_{T}>20) [GeV];Events",10,0,250) );
+  mon.addHistogram( new TH1F("vbfhtcjv"            , ";H_{T}(p_{T}>30) [GeV];Events",10,0,250) );
+  mon.addHistogram( new TH1F("vbfmaxcjvjpt"        , ";Third jet p_{T} [GeV];Events", 15,0,300) );
+  mon.addHistogram( new TH1F("vbfystar3"           , ";y_{j3}-(y_{j1}+y_{j2})/2;Events",10,0,5) );
 
   Double_t mjjaxis[32];
   mjjaxis[0]=0.01;
@@ -329,7 +400,7 @@ int main(int argc, char* argv[])
   mjjaxis[31]=5000;
   mon.addHistogram( new TH1F("vbfmjj"            , ";Dijet invariant mass [GeV];Events",               31,mjjaxis) );
   mon.addHistogram( new TH1F("vbfdphijj"         , ";Dijet azimuthal opening (#Delta#phi_{jj});Events", 20,0,3.5) );
-  mon.addHistogram( new TH1F("vbfystar"          , ";y^{*}_{ll}=#eta_{ll}-(#eta_{j1}+#eta_{j2})/2;Events",       50,0,5) );
+  mon.addHistogram( new TH1F("vbfystar"          , ";y^{*}_{ll}=#eta_{ll}-(#eta_{j1}+#eta_{j2})/2;Events",       10,0,5) );
   mon.addHistogram( new TH1F("vbfpt"             , ";Dijet p_{T} [GeV];Dijets",       50,0,500) );
   mon.addHistogram( new TH1F("met"               , ";E_{T}^{miss} [GeV]; Events",        50,0,500) );
   mon.addHistogram( new TH1F("metL"              , ";Axial E_{T}^{miss} [GeV]; Events",  50,-50,200) );
@@ -437,14 +508,15 @@ int main(int argc, char* argv[])
 	  TString var("_"); var+=i;
 	  mon.addHistogram( new TH1F("vbfcandjetdeta"+var    , ";|#Delta #eta|;Jets",                             50,0,10) );
 	  mon.addHistogram( new TH1F("vbfcandjet1eta"+var    , ";#eta;Jets",                                      50,0,5) );
-	  mon.addHistogram( new TH1F("vbfcandjet1pt"+var     , ";p_{T} [GeV];Jets",                               50,0,500) );
+	  mon.addHistogram( new TH1F("vbfcandjet1pt"+var     , ";p_{T} [GeV];Jets",                               50,0,1000) ); //nptBins,jetptaxis) );
 	  mon.addHistogram( new TH1F("vbfcandjet2eta"+var    , ";#eta;Jets",                                      50,0,5) );
-	  mon.addHistogram( new TH1F("vbfcandjet2pt"+var     , ";p_{T} [GeV];Jets",                               50,0,500) );
+	  mon.addHistogram( new TH1F("vbfcandjet2pt"+var     , ";p_{T} [GeV];Jets",                               50,0,500) ); //nptBins,jetptaxis) );
 	  mon.addHistogram( new TH1F("vbfspt"+var            , ";Relative balance (#Delta^{rel}_{p_{T}});Events", 50,0,1) );
 	}
+      cout << "Readout " << mPDFInfo->numberPDFs() << " pdf variations" << endl;
     }
 
-  //pileup weighting: based on vtx for now...
+  //pileup weighting
   std::vector<double> dataPileupDistributionDouble = runProcess.getParameter< std::vector<double> >("datapileup");
   std::vector<float> dataPileupDistribution; for(unsigned int i=0;i<dataPileupDistributionDouble.size();i++){dataPileupDistribution.push_back(dataPileupDistributionDouble[i]);}
   std::vector<float> mcPileupDistribution;
@@ -494,8 +566,8 @@ int main(int argc, char* argv[])
       data::PhysicsObjectCollection_t leptons=evSummary.getPhysicsObject(DataEventSummaryHandler::LEPTONS);
       data::PhysicsObjectCollection_t jets=evSummary.getPhysicsObject(DataEventSummaryHandler::JETS);
       data::PhysicsObjectCollection_t recoMet=evSummary.getPhysicsObject(DataEventSummaryHandler::MET);
-      data::PhysicsObjectCollection_t gen=evSummary.getPhysicsObject(DataEventSummaryHandler::GENPARTICLES);
-      
+      data::PhysicsObjectCollection_t gen=evSummary.getPhysicsObject(DataEventSummaryHandler::GENPARTICLES);      
+
       //require compatibilitiy of the event with the PD
       bool eeTrigger          = ev.t_bits[0];
       bool muTrigger          = ev.t_bits[6];
@@ -506,6 +578,7 @@ int main(int argc, char* argv[])
       
       bool hasPhotonTrigger(false);
       float triggerPrescale(1.0),triggerThreshold(0);
+      TString phoTrigCat("");
       if(runPhotonSelection)
 	{
 	  eeTrigger=false; mumuTrigger=false;
@@ -514,10 +587,10 @@ int main(int argc, char* argv[])
 	      if(!ev.t_bits[itrig]) continue;
 	      hasPhotonTrigger=true;
 	      triggerPrescale=ev.t_prescale[itrig];
-	      if(itrig==10) triggerThreshold=90;
-	      if(itrig==9)  triggerThreshold=75;
-	      if(itrig==8)  triggerThreshold=50;
-	      if(itrig==7)  triggerThreshold=36;
+	      if(itrig==10) {triggerThreshold=90; phoTrigCat="Photon90";}
+	      if(itrig==9)  {triggerThreshold=75; phoTrigCat="Photon75";}
+	      if(itrig==8)  {triggerThreshold=50; phoTrigCat="Photon50";}
+	      if(itrig==7)  {triggerThreshold=36; phoTrigCat="Photon36";}
 	      break;
 	    }
 	}
@@ -615,7 +688,7 @@ int main(int argc, char* argv[])
 	  int lid=leptons[ilep].get("id");
 
 	  //apply muon corrections
-	  if(lid==13 && muCor){
+	  if(abs(lid)==13 && muCor){
 	    TLorentzVector p4(leptons[ilep].px(),leptons[ilep].py(),leptons[ilep].pz(),leptons[ilep].energy());
 	    muCor->applyPtCorrection(p4 , lid<0 ? -1 :1 );
 	    if(isMC) muCor->applyPtSmearing(p4, lid<0 ? -1 : 1, false);
@@ -672,6 +745,72 @@ int main(int argc, char* argv[])
 
       std::sort(selLeptons.begin(), selLeptons.end(), data::PhysicsObject_t::sortByPt);
 
+
+      
+      //
+      //JET/MET ANALYSIS
+      //
+      //add scale/resolution uncertainties and propagate to the MET
+      utils::cmssw::updateJEC(jets,jesCor,totalJESUnc,ev.rho,ev.nvtx,isMC);
+      std::vector<LorentzVector> met=utils::cmssw::getMETvariations(recoMet[0],jets,selLeptons,isMC);
+
+      //select the jets
+      data::PhysicsObjectCollection_t selJets, selJetsNoId;
+      int njets(0);
+      for(size_t ijet=0; ijet<jets.size(); ijet++) 
+	{
+	  if(jets[ijet].pt()<15 || fabs(jets[ijet].eta())>4.7 ) continue;
+
+	  //mc truth for this jet
+	  const data::PhysicsObject_t &genJet=jets[ijet].getObject("genJet");
+	  TString jetType( genJet.pt()>0 ? "truejetsid" : "pujetsid" );
+	  
+	  //cross-clean with selected leptons and photons
+	  double minDRlj(9999.),minDRlg(9999.);
+          for(size_t ilep=0; ilep<selLeptons.size(); ilep++)
+            minDRlj = TMath::Min( minDRlj, deltaR(jets[ijet],selLeptons[ilep]) );
+	  for(size_t ipho=0; ipho<selPhotons.size(); ipho++)
+	    minDRlg = TMath::Min( minDRlg, deltaR(jets[ijet],selPhotons[ipho]) );
+	  if(minDRlj<0.4 || minDRlg<0.4) continue;
+	  
+	  //jet id
+	  // float pumva=jets[ijet].getVal("puMVA");
+	  Int_t idbits=jets[ijet].get("idbits");
+	  bool passPFloose( ((idbits>>0) & 0x1));
+	  //int puId( ( idbits >>3 ) & 0xf );
+	  //bool passLoosePuId( ( puId >> 2) & 0x1);
+	  int simplePuId( ( idbits >>7 ) & 0xf );
+	  bool passLooseSimplePuId(  ( simplePuId >> 2) & 0x1);
+	  if(jets[ijet].pt()>30)
+	    {
+	      mon.fillHisto(jetType,"",fabs(jets[ijet].eta()),0);
+	      if(passPFloose)                        mon.fillHisto(jetType,"",fabs(jets[ijet].eta()),1);
+	      if(passLooseSimplePuId)                mon.fillHisto(jetType,"",fabs(jets[ijet].eta()),2);
+	      if(passPFloose && passLooseSimplePuId) mon.fillHisto(jetType,"",fabs(jets[ijet].eta()),3);
+	    }
+	  
+	  selJetsNoId.push_back(jets[ijet]);
+	  if(passPFloose && passLooseSimplePuId){
+	    selJets.push_back(jets[ijet]);
+	    if(jets[ijet].pt()>minJetPtToApply) njets++;
+	  }
+	}
+      std::sort(selJets.begin(), selJets.end(), data::PhysicsObject_t::sortByPt);
+
+
+      //check acceptance
+      bool isGenEEorMuMu=passGenAcceptance(gen,true);
+      bool isInGenAcceptance=passGenAcceptance(gen);
+      bool isInRecoAcceptance=(passPhaseSpaceAcceptance(selLeptons,selJets,true) && (eeTrigger||mumuTrigger));
+      if(isGenEEorMuMu){
+	float weight=1.0;
+	mon.fillHisto("psacceptance","",0,weight);
+	if(isInGenAcceptance) mon.fillHisto("psacceptance","",1,weight);
+	if(isInRecoAcceptance) mon.fillHisto("psacceptance","",2,weight);
+	if(isInGenAcceptance && isInRecoAcceptance) mon.fillHisto("psacceptance","",3,weight);
+	if(!isInGenAcceptance && isInRecoAcceptance) mon.fillHisto("psacceptance","",4,weight);
+      }
+
       //at this point check if it's worth continuig
       if(runPhotonSelection && (selLeptons.size()!=0 || selPhotons.size()!=1)) continue;
       if(!runPhotonSelection && selLeptons.size()<2) continue;
@@ -725,56 +864,7 @@ int main(int argc, char* argv[])
 	  genll += gen[ig];
 	}
       
-      //
-      //JET/MET ANALYSIS
-      //
-      //add scale/resolution uncertainties and propagate to the MET
-      utils::cmssw::updateJEC(jets,jesCor,totalJESUnc,ev.rho,ev.nvtx,isMC);
-      std::vector<LorentzVector> met=utils::cmssw::getMETvariations(recoMet[0],jets,selLeptons,isMC);
 
-      //select the jets
-      data::PhysicsObjectCollection_t selJets, selJetsNoId;
-      int njets(0);
-      for(size_t ijet=0; ijet<jets.size(); ijet++) 
-	{
-	  if(jets[ijet].pt()<15 || fabs(jets[ijet].eta())>4.7 ) continue;
-
-	  //mc truth for this jet
-	  const data::PhysicsObject_t &genJet=jets[ijet].getObject("genJet");
-	  TString jetType( genJet.pt()>0 ? "truejetsid" : "pujetsid" );
-	  
-	  //cross-clean with selected leptons and photons
-	  double minDRlj(9999.),minDRlg(9999.);
-          for(size_t ilep=0; ilep<selLeptons.size(); ilep++)
-            minDRlj = TMath::Min( minDRlj, deltaR(jets[ijet],selLeptons[ilep]) );
-	  for(size_t ipho=0; ipho<selPhotons.size(); ipho++)
-	    minDRlg = TMath::Min( minDRlg, deltaR(jets[ijet],selPhotons[ipho]) );
-	  if(minDRlj<0.4 || minDRlg<0.4) continue;
-	  
-	  //jet id
-	  // float pumva=jets[ijet].getVal("puMVA");
-	  Int_t idbits=jets[ijet].get("idbits");
-	  bool passPFloose( ((idbits>>0) & 0x1));
-	  //int puId( ( idbits >>3 ) & 0xf );
-	  //bool passLoosePuId( ( puId >> 2) & 0x1);
-	  int simplePuId( ( idbits >>7 ) & 0xf );
-	  bool passLooseSimplePuId(  ( simplePuId >> 2) & 0x1);
-	  if(jets[ijet].pt()>30)
-	    {
-	      mon.fillHisto(jetType,chTags,fabs(jets[ijet].eta()),0);
-	      if(passPFloose)                        mon.fillHisto(jetType,chTags,fabs(jets[ijet].eta()),1);
-	      if(passLooseSimplePuId)                mon.fillHisto(jetType,chTags,fabs(jets[ijet].eta()),2);
-	      if(passPFloose && passLooseSimplePuId) mon.fillHisto(jetType,chTags,fabs(jets[ijet].eta()),3);
-	    }
-	       
-	  selJetsNoId.push_back(jets[ijet]);
-	  if(passPFloose && passLooseSimplePuId){
-	    selJets.push_back(jets[ijet]);
-	    if(jets[ijet].pt()>minJetPtToApply) njets++;
-	  }
-	}
-      std::sort(selJets.begin(), selJets.end(), data::PhysicsObject_t::sortByPt);
-      
       //analyze dijets and activity in the dijet rapidity distance
       float maxPt(0), minPt(0), maxEta(0), minEta(0), maxAbsEta(0), minAbsEta(0);
       float dphijj(0), detajj(0), setajj(0), etaprod(0), ystar(0), mjj(0),ptjj(0),spt(0);
@@ -973,6 +1063,7 @@ int main(int argc, char* argv[])
 		  TString mjjCat("");
 		  std::vector<TString> selTags;
 		  selTags = getDijetCategories(mjj,detajj,tags,mjjCat);
+		  if(phoTrigCat!="") selTags.push_back(phoTrigCat);
 
 		  //re-weight for photons if needed
 		  if(gammaWgtHandler!=0) {
@@ -985,6 +1076,13 @@ int main(int argc, char* argv[])
 
 		  //save for further analysis
 		  if(mjj>200) {
+		    if(mjj>2000 && ev.nvtx<18 && njets==2){
+		      fprintf(outTxtFile,"--------- CANDIDATE EVENT ---------\n");
+		      fprintf(outTxtFile,"%d:%d:%d    mjj=%f  ystar=%f spt=%f\n",ev.run,ev.lumi,ev.event,mjj,ystar,spt);
+		      fprintf(outTxtFile,"j1 (%f,%f,%f)\n",selJets[0].pt(),selJets[0].eta(),selJets[0].phi());
+		      fprintf(outTxtFile,"j2 (%f,%f,%f)\n",selJets[1].pt(),selJets[1].eta(),selJets[1].phi());
+		      fprintf(outTxtFile,"z (%f,%f,%f) m=%f\n",zll.pt(),zll.eta(),zll.phi(),zll.mass());
+		    }
 		    ev.cat=dilId;
 		    summaryTupleVars[0]=ev.cat;  
 		    summaryTupleVars[1]=catWeight*xsecWeight;    
@@ -1012,8 +1110,8 @@ int main(int argc, char* argv[])
 		  mon.fillHisto("njetsvsavginstlumi", selTags, njets,ev.instLumi,catWeight);
 		  mon.fillHisto("vbfcandjetpt",       selTags, maxPt,catWeight);
 		  mon.fillHisto("vbfcandjetpt",       selTags, minPt,catWeight);
-		  mon.fillHisto("vbfcandjet1pt",      selTags, maxPt,catWeight);
-		  mon.fillHisto("vbfcandjet2pt",      selTags, minPt,catWeight);
+		  mon.fillHisto("vbfcandjet1pt",      selTags, maxPt,catWeight);//,true);
+		  mon.fillHisto("vbfcandjet2pt",      selTags, minPt,catWeight);//,true);
 		  mon.fillHisto("vbfcandjet1eta",     selTags, maxAbsEta, catWeight);
 		  mon.fillHisto("vbfcandjet2eta",     selTags, minAbsEta, catWeight);
 		  mon.fillHisto("vbfcandjeteta",      selTags, maxAbsEta, catWeight);
@@ -1071,8 +1169,8 @@ int main(int argc, char* argv[])
 			{
 			  TString var("_"); var+=ipw;
 			  mon.fillHisto("vbfcandjetdeta"+var,     selTags, detajj,    catWeight*wgts[ipw]);
-			  mon.fillHisto("vbfcandjet1pt"+var,      selTags, maxPt,     catWeight*wgts[ipw]);
-			  mon.fillHisto("vbfcandjet2pt"+var,      selTags, minPt,     catWeight*wgts[ipw]);
+			  mon.fillHisto("vbfcandjet1pt"+var,      selTags, maxPt,     catWeight*wgts[ipw]);//,true);
+			  mon.fillHisto("vbfcandjet2pt"+var,      selTags, minPt,     catWeight*wgts[ipw]);//,true);
 			  mon.fillHisto("vbfcandjet1eta"+var,     selTags, maxAbsEta, catWeight*wgts[ipw]);
 			  mon.fillHisto("vbfcandjet2eta"+var,     selTags, minAbsEta, catWeight*wgts[ipw]);
 			  mon.fillHisto("vbfspt"+var,            selTags, spt,       catWeight*wgts[ipw]);
@@ -1103,7 +1201,7 @@ int main(int argc, char* argv[])
 		}
 
 	      for(size_t ivar=0; ivar<nvarsToInclude; ivar++){
-		float iweight = weight*photonWeight;                                   //nominal
+		float iweight = weight;                                                //nominal
 		if(ivar==5)                        iweight *= TotalWeight_plus;        //pu up
 		if(ivar==6)                        iweight *= TotalWeight_minus;       //pu down
 		if(ivar==7)                        iweight *= Q2Weight_plus;
@@ -1136,7 +1234,7 @@ int main(int argc, char* argv[])
 		}
 		if(localSelJets.size()<2)  continue;
 		std::sort(localSelJets.begin(), localSelJets.end(),  data::PhysicsObject_t::sortByPt);
-
+		
 		//recoil residuals uncertainty
 		if( (ivar==11 || ivar==12) && recoilResidualsGr)
 		  {
@@ -1158,7 +1256,7 @@ int main(int argc, char* argv[])
 		    bool passLocalJet1Pt(localSelJets[0].pt()>minJetPt1);
 		    bool passLocalJet2Pt(localSelJets[1].pt()>minJetPt2);
 		    if(!passLocalJet1Pt || !passLocalJet2Pt) continue; 
-		
+		    
 		    LorentzVector vbfSyst=localSelJets[0]+localSelJets[1];
 		    float mjj=vbfSyst.M();
 		    float detajj=fabs(localSelJets[0].eta()-localSelJets[1].eta());
@@ -1166,16 +1264,16 @@ int main(int argc, char* argv[])
 		    
 		    TString mjjCat("");
 		    std::vector<TString> localSelTags=getDijetCategories(mjj,detajj,locTags,mjjCat);
+		    float finalWeight(iweight);
 		    if(gammaWgtHandler!=0) {
-		      //mjjCat.ReplaceAll("mjjq100","mjjq092");
-		      iweight *= gammaWgtHandler->getWeightFor(selPhotons[0],chTags[ich]+mjjCat);
+		      finalWeight *= gammaWgtHandler->getWeightFor(selPhotons[0],chTags[ich]+mjjCat);
 		    }
-		    mon.fillHisto(TString("dijet_deta_shapes")+varNames[ivar],localSelTags,index,detajj,iweight);
+		    mon.fillHisto(TString("dijet_deta_shapes")+varNames[ivar],localSelTags,index,detajj,finalWeight);
 		    
 		    //set the variables to be used in the MVA evaluation (independently of its use)
 		    for(size_t mvar=0; mvar<tmvaVarNames.size(); mvar++) 
 		      {
-			std::string variable        = tmvaVarNames[mvar];
+			std::string variable     = tmvaVarNames[mvar];
 			if(variable=="mjj")        tmvaVars[mvar]=mjj;
 			if(variable=="detajj")     tmvaVars[mvar]=detajj;
 			if(variable=="spt")        tmvaVars[mvar]=spt;
@@ -1184,7 +1282,7 @@ int main(int argc, char* argv[])
 		      for(size_t im=0; im<tmvaMethods.size(); im++)
 			{
 			  float iTmvaDiscrVal=tmvaReader->EvaluateMVA( tmvaMethods[im] );
-			  mon.fillHisto(TString(tmvaMethods[im]+"_shapes")+varNames[ivar],localSelTags,index,iTmvaDiscrVal,iweight);
+			  mon.fillHisto(TString(tmvaMethods[im]+"_shapes")+varNames[ivar],localSelTags,index,iTmvaDiscrVal,finalWeight);
 			}
 		  }
 	      }

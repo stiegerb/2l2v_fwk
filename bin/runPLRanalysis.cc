@@ -39,12 +39,14 @@ TString mcName="ModelConfig";
 Float_t iEcm=8.0;
 Float_t iLumi=19600;
 Float_t cl=0.68;
+bool noplot=false;
 
 struct FitResults_t
 {
   float r,rmin,rmax;
   float totalUnc, statUnc;
   std::map<TString,float> uncList;
+  TH1F *postFitNuisGr;
 };
 
 void showPLR(std::vector<std::pair<TString,TGraph *> > &plotList, TString fout, TString header, float rmin, float rmax);
@@ -52,6 +54,17 @@ void showPLR(std::vector<std::pair<TString,TGraph *> > &plotList, TString fout, 
 //
 int main(int argc, char *argv[])
 {
+  
+  //keep RooFit quiet                                                                                                                                                          
+  RooMsgService::instance().setSilentMode(true);
+  RooMsgService::instance().getStream(0).removeTopic(Minimization);
+  RooMsgService::instance().getStream(1).removeTopic(Minimization);
+  RooMsgService::instance().getStream(1).removeTopic(Fitting);
+  RooMsgService::instance().getStream(0).removeTopic(Eval);
+  RooMsgService::instance().getStream(1).removeTopic(Eval);
+  RooMsgService::instance().getStream(1).removeTopic(Integration);
+  RooMsgService::instance().getStream(1).removeTopic(NumIntegration);
+  RooMsgService::instance().getStream(1).removeTopic(ObjectHandling);
   
   for(int i=1;i<argc;i++){
     string arg(argv[i]);
@@ -82,6 +95,7 @@ int main(int argc, char *argv[])
     else if(arg.find("--cl")!=string::npos && i+1<argc)   { sscanf(argv[i+1],"%f",&cl);    i++; cout << "C.L.: " << cl << endl; }
     else if(arg.find("--ecm")!=string::npos && i+1<argc)  { sscanf(argv[i+1],"%f",&iEcm);  i++; cout << "Ecm: " << iEcm << endl; }
     else if(arg.find("--lumi")!=string::npos && i+1<argc) { sscanf(argv[i+1],"%f",&iLumi); i++; cout << "Lumi: " << iLumi << endl; }
+    else if(arg.find("--noplot")!=string::npos) { noplot=true; cout << "Won't draw PLR: " << endl; }
   }
   
   setTDRStyle(); 
@@ -148,10 +162,8 @@ int main(int argc, char *argv[])
 	  TString test("total");
 	  if(in>=0)
 	    {
-	      if(in==0) test="stat";
-	      else      test=nuisNames[in-1];
-
 	      //fix all nuisances except the one being tested
+	      //force the nuisance values to the postfit result
 	      TIterator *nuis_params_itr = mc->GetNuisanceParameters()->createIterator();
 	      TObject *nuis_params_obj;
 	      while((nuis_params_obj=nuis_params_itr->Next())){
@@ -162,8 +174,9 @@ int main(int argc, char *argv[])
 		    if(fitNuis && !isnan(float(fitNuis->getVal()))) nVar->setVal(fitNuis->getVal()); 
 		    else                                            nVar->setVal(0);
 		  }
-		if(in==0)                                 nVar->setConstant(kTRUE);
-		else if(nuisNames[in-1]!=nVar->GetName()) nVar->setConstant(kTRUE);
+		
+		if(in==0)                                 {test="stat";          nVar->setConstant(kTRUE); }
+		else if(nuisNames[in-1]!=nVar->GetName()) {test=nuisNames[in-1]; nVar->setConstant(kTRUE); }
 	      }
 	    }
 	  
@@ -186,64 +199,77 @@ int main(int argc, char *argv[])
 	  if(in<0)      { 
 	    fr.r=ir;  fr.rmin=irmin; fr.rmax=irmax; fr.totalUnc=relErr; 
 
-	    //signal significance from null hypothesis
-	    /*
-	      RooArgSet* nullParams = new RooArgSet("nullParams");
-	      nullParams->addClone(firstPOI);
-	      nullParams->setRealValue(firstPOI->getName(),0);  // set the value of the parameter for the null hypothesis
-	      ProfileLikelihoodCalculator plCalc3(data,modelWithConstraints,poiList,0.05,nullParams);
-	      HypoTestResult* plHtr = plCalc3.GetHypoTest();
-	      std::cout << "The p-value for the null hypo. is " << plHtr->NullPValue() << std::endl;
-	      std::cout << "Corresponding to a signifcance of " << plHtr->Significance() << std::endl;
-	    */
+	    //get post-fit nuisances and save them in a labeled histogram
+	    std::map<TString,float> postFitNuis;
+	    TIterator *nuis_params_itr = profNuis->createIterator();
+	    TObject *nuis_params_obj;
+	    while((nuis_params_obj=nuis_params_itr->Next())){
+	      RooRealVar *nuiVar=(RooRealVar *)nuis_params_obj;
+	      if(nuiVar==0) continue;
+	      if(isnan(float(nuiVar->getVal())) ) continue;
+	      postFitNuis[nuiVar->GetTitle()]=nuiVar->getVal();
 	    }
+	    fr.postFitNuisGr = new TH1F("pfnpull_"+chTag,";Nuisance parameter;Pull (n x #sigma);",postFitNuis.size(),0,postFitNuis.size());
+	    fr.postFitNuisGr->SetDirectory(0);
+	    fr.postFitNuisGr->SetFillColor(38);
+	    fr.postFitNuisGr->SetStats(0);
+	    int ibin(1);
+	    for(std::map<TString,float>::iterator nIt=postFitNuis.begin(); nIt!=postFitNuis.end(); nIt++,ibin++)
+	      {
+		fr.postFitNuisGr->GetXaxis()->SetBinLabel(ibin,nIt->first);
+		fr.postFitNuisGr->SetBinContent(ibin,nIt->second);
+	      }
+	  }
 	  if (in==0)    { fr.statUnc=statUnc;}
 	  else if(in>0) { fr.uncList[test]=relErr; }
-
+	  
 	  if(in<=0)
 	    {
 	      //this is the most stupid thing ... to get the likelihood curve
 	      //from the list of primitives in the canvas, convert the RooCurve to a TGraph
 	      //even if the class is derived from it (otherwise it crashes)
-	      TCanvas *c= new TCanvas("c","c",600,600);
-	      LikelihoodIntervalPlot plot(interval);
-	      //plot.SetRange(0,3.5);
-	      //plot.SetNPoints(100);	      
-	      float maxX(3);
-	      if(fr.rmax>3) maxX=6;
-	      plot.SetRange(0,maxX);
-	      plot.SetNPoints(200);
-	      plot.Draw(""); 
-	      TIter nextpobj(c->GetListOfPrimitives());
-	      TObject *pobj;
-	      while ((pobj = nextpobj()))
+	      if(!noplot)
 		{
-		  if(pobj==0) break;
-		  TString pobjName(pobj->GetName());
-		  if(!pobjName.BeginsWith("nll")) continue;
-		  RooCurve *nllCurve=(RooCurve *)pobj;
-		  TGraph *gr=new TGraph;
-		  for(int ipt=0; ipt<nllCurve->GetN(); ipt++)
+		  TCanvas *c= new TCanvas("c","c",600,600);
+		  LikelihoodIntervalPlot plot(interval);
+		  //plot.SetRange(0,3.5);
+		  //plot.SetNPoints(100);	      
+		  float maxX(3);
+		  if(fr.rmax>3) maxX=6;
+		  plot.SetRange(0,maxX);
+		  plot.SetNPoints(200);
+		  plot.Draw(""); 
+		  TIter nextpobj(c->GetListOfPrimitives());
+		  TObject *pobj;
+		  while ((pobj = nextpobj()))
 		    {
-		      Double_t ix,iy;
-		      nllCurve->GetPoint(ipt,ix,iy);
-		      gr->SetPoint(ipt,ix,iy);
-		    }		  
-		  gr->SetName(chTag);
-		  plotList.push_back(std::pair<TString,TGraph *>(test,gr));
-		  if(in<0) {
-		    finalPlotList.push_back( std::pair<TString,TGraph *>( chTag, gr) );
-		    if(chTag.Contains("inclusive") || chTag.Contains("combined") || chTag.Contains("total"))
-		      {
-			int n = gr->GetN();
-			double* y = gr->GetY();
-			int locmax = TMath::LocMax(n,y);
-			finalRmin=irmin;
-			finalRmax=irmax;
+		      if(pobj==0) break;
+		      TString pobjName(pobj->GetName());
+		      if(!pobjName.BeginsWith("nll")) continue;
+		      RooCurve *nllCurve=(RooCurve *)pobj;
+		      TGraph *gr=new TGraph;
+		      for(int ipt=0; ipt<nllCurve->GetN(); ipt++)
+			{
+			  Double_t ix,iy;
+			  nllCurve->GetPoint(ipt,ix,iy);
+			  gr->SetPoint(ipt,ix,iy);
+			}		  
+		      gr->SetName(chTag);
+		      plotList.push_back(std::pair<TString,TGraph *>(test,gr));
+		      if(in<0) {
+			finalPlotList.push_back( std::pair<TString,TGraph *>( chTag, gr) );
+			if(chTag.Contains("inclusive") || chTag.Contains("combined") || chTag.Contains("total"))
+			  {
+			    int n = gr->GetN();
+			    double* y = gr->GetY();
+			    int locmax = TMath::LocMax(n,y);
+			    finalRmin=irmin;
+			    finalRmax=irmax;
+			  }
 		      }
-		  }
+		    }
+		  delete c;
 		}
-	      delete c;
 	    }
 
 	  delete interval;
@@ -251,40 +277,30 @@ int main(int argc, char *argv[])
 	}
 
 
-      //show the plot
+      //show the PLR curve and post-fit nuisances
       TString fout("PLR"); fout += (ifile+1);
-      showPLR(plotList,fout,chTag,fr.rmin,fr.rmax);
+      if(!noplot) showPLR(plotList,fout,chTag,fr.rmin,fr.rmax);
+
+      //show post-fit nuisances
+      TCanvas *c=new TCanvas("cpfn","cpfn",800,400);
+      fr.postFitNuisGr->Draw("b");
+      fr.postFitNuisGr->GetXaxis()->CenterTitle();
+      fr.postFitNuisGr->GetYaxis()->SetRangeUser(-2.5,2.5);
+      fr.postFitNuisGr->LabelsDeflate("X");
+      c->SaveAs(fout+"_nuis.png");
+      c->SaveAs(fout+"_nuis.pdf");
+      c->SaveAs(fout+"_nuis.C");
+
+      //save results
       TString key(chTag);
       if(key=="inclusive" || key=="combined") key="."+key;
       finalResults[key]=fr;
-    
-      /*
-      //
-      ProfileInspector p;
-      TList* list = p.GetListOfProfilePlots(*data,mc);
-      TCanvas* c1 = new TCanvas("c1","ProfileInspectorDemo",1200,1200);
-      c1->Divide(list->GetSize()/4+1,4);
-      for(int i=0; i<list->GetSize(); ++i){
-      c1->cd(i+1);
-      TGraph *gr=(TGraph *) list->At(i);
-      TGraph *frame=new TGraph;
-      frame->SetPoint(0,-0.5,-1.5);
-      frame->SetPoint(1,3.5,1.5);
-      frame->SetMarkerStyle(1);
-      frame->Draw("ap");
-      frame->GetYaxis()->SetRangeUser(-1,1);
-      frame->GetYaxis()->SetTitle(gr->GetYaxis()->GetTitle());
-      frame->GetXaxis()->SetRangeUser(0,3);
-      frame->GetXaxis()->SetTitle(gr->GetXaxis()->GetTitle());
-      gr->Draw("l");
-      }
-      c1->SaveAs("~/www/LikelihoodInspector.png");
-      return 0;
-      */
     }
-  
-  showPLR(finalPlotList,"PLR","",finalRmin,finalRmax);
 
+  //show final results  
+  if(!noplot) showPLR(finalPlotList,"PLR","",finalRmin,finalRmax);
+
+  //print tex table
   cout << endl << endl;
   cout << "Category &               ";
   for(std::map<TString,FitResults_t>::iterator it = finalResults.begin(); it != finalResults.end(); it++) cout << it ->first <<  " & ";
@@ -326,6 +342,8 @@ int main(int argc, char *argv[])
 //
 void showPLR(std::vector<std::pair<TString,TGraph *> > &plotList, TString fout,TString header, float rmin,float rmax)
 {
+  if(noplot) return;
+
   //order and name the graphs
   std::vector<TGraph *> orderedPlotList;
   for(size_t ipl=0; ipl<plotList.size(); ipl++)

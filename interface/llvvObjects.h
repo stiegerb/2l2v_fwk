@@ -108,6 +108,9 @@ class llvvLepton : public LorentzVectorF
    //Specific Lepton Information
    llvvMuonInfoRef     muonInfoRef;
    llvvElectronInfoRef electronInfoRef;
+
+   //functions
+
 };
 typedef  std::vector<llvvLepton> llvvLeptonCollection;
 typedef  edm::Ref<llvvLeptonCollection> llvvLeptonRef;
@@ -138,6 +141,9 @@ class llvvTau  : public LorentzVectorF {
    int   numChargedParticlesIsoCone, numNeutralHadronsIsoCone, numPhotonsIsoCone,                   numParticlesIsoCone;
    float ptSumChargedParticlesIsoCone, ptSumPhotonsIsoCone;
    float mva_e_pi, mva_pi_mu, mva_e_mu;
+
+   //functions
+   bool passId(unsigned int IdBit){return ((idbits&(1<<IdBit))>0);}
 };
 typedef  std::vector<llvvTau> llvvTauCollection;
 typedef  edm::Ref<llvvTauCollection> llvvTauRef;
@@ -238,6 +244,7 @@ struct llvvJetInfo{};
 class llvvJetExt : public llvvJet{
    public:
    llvvJetExt(llvvJet jet_){
+      SetPxPyPzE(jet_.px(), jet_.py(), jet_.pz(), jet_.energy());
       idbits=jet_.idbits; pfstart=jet_.pfstart; pfend=jet_.pfend;
       torawsf=jet_.torawsf;
       neutHadFrac=jet_.neutHadFrac; neutEmFrac=jet_.neutEmFrac; chHadFrac=jet_.chHadFrac; muFrac=jet_.muFrac; area=jet_.area;

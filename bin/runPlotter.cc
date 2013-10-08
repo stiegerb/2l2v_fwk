@@ -38,7 +38,7 @@ double iLumi = 2007;
 double iEcm=8;
 bool showChi2 = false;
 bool showUnc=false;
-double baseRelUnc=0.044;
+double baseRelUnc=0.027;
 bool noLog=false;
 bool logX=false;
 bool isSim=false;
@@ -119,7 +119,7 @@ void GetListOfObject(JSONWrapper::Object& Root, std::string RootDir, std::list<N
       for(size_t ip=0; ip<Process.size(); ip++){
           if(Process[ip]["isinvisible"].toBool())continue;
 	  bool isData (  Process[ip]["isdata"].toBool()  );
-          bool isSign ( !isData &&  Process[ip].isTag("spimpose") && Process[ip]["spimpose"].toBool());
+          bool isSign ( !isData &&  ((Process[ip].isTag("spimpose") && Process[ip]["spimpose"].toBool()) || (Process[ip].isTag("issignal") && Process[ip]["issignal"].toBool()) ) );
   	  bool isMC   = !isData && !isSign; 
 	  string filtExt("");
 	  if(Process[ip].isTag("mctruthmode") ) { char buf[255]; sprintf(buf,"_filt%d",(int)Process[ip]["mctruthmode"].toInt()); filtExt += buf; }
@@ -1049,8 +1049,8 @@ int main(int argc, char* argv[]){
 	printf("--plotExt --> extension to save\n");
 	printf("--cutflow --> name of the histogram with the original number of events (cutflow by default)\n");
         printf("--splitCanvas --> (only for 2D plots) save all the samples in separated pltos\n");
-        printf("--forceMerge --> merge splitted samples");
-	printf("--useMerged --> use merged splitted samples");
+        printf("--forceMerge --> merge splitted samples\n");
+	printf("--useMerged --> use merged splitted samples\n");
 
         printf("command line example: runPlotter --json ../data/beauty-samples.json --iLumi 2007 --inDir OUT/ --outDir OUT/plots/ --outFile plotter.root --noRoot --noPlot\n");
 	return 0;

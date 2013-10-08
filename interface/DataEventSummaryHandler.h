@@ -12,6 +12,11 @@ namespace data
   {
   public:
 
+    PhysicsObject_t()
+      {
+	SetPxPyPzE(0,0,0,0);
+      }
+
     PhysicsObject_t(Float_t px, Float_t py, Float_t pz, Float_t en)
       {
 	SetPxPyPzE(px,py,pz,en);
@@ -93,7 +98,7 @@ namespace utils
     void updateJEC(data::PhysicsObjectCollection_t &jets, FactorizedJetCorrector *jesCor, JetCorrectionUncertainty *totalJESUnc, float rho, int nvtx,bool isMC);
 
     //apply MET variations
-    enum METvariations { JERUP, JERDOWN, JESUP, JESDOWN, UMETUP, UMETDOWN };
+    enum METvariations { NOMINAL, JERUP, JERDOWN, JESUP, JESDOWN, UMETUP, UMETDOWN, LESUP, LESDOWN };
     std::vector<LorentzVector> getMETvariations(data::PhysicsObject_t &rawMETP4, data::PhysicsObjectCollection_t &jets, data::PhysicsObjectCollection_t &leptons, bool isMC);
   }
 }

@@ -484,7 +484,7 @@ bool llvvObjectProducers::filter(edm::Event& iEvent, const edm::EventSetup &iSet
 
 		//store information
                 lep.SetPxPyPzE(muon->px(), muon->py(), muon->pz(), muon->energy()); 
-		lep.id                         = 13*muon->charge();
+		lep.id                         = -13*muon->charge();
 //		lep.pid                        = ev.mn;
 		lep.isPF                       = isPF;                
 		lep.genid                      = genLep ? genLep->pdgId() :0;
@@ -591,7 +591,7 @@ bool llvvObjectProducers::filter(edm::Event& iEvent, const edm::EventSetup &iSet
 
 		//store information
                 lep.SetPxPyPzE(ele->px(), ele->py(), ele->pz(),  ele->energy());
-		lep.id                         = 11*ele->charge();
+		lep.id                         = -11*ele->charge();
 //		lep.pid                        = ev.egn;
 		lep.isPF                       = ele->isPF(); 
 		lep.genid                      = genLep ? genLep->pdgId() :0;
@@ -716,7 +716,7 @@ bool llvvObjectProducers::filter(edm::Event& iEvent, const edm::EventSetup &iSet
 		   llvvTau tauInfo;
 
 		   tauInfo.SetPxPyPzE(tau->px(), tau->py(), tau->pz(),  tau->energy());
-		   tauInfo.id                         = 15*tau->charge();
+		   tauInfo.id                         = -15*tau->charge();
 		   tauInfo.isPF                       = tau->isPFTau();
 		   tauInfo.genid                      = genLep ? genLep->pdgId() :0;
 		   if(genLep)tauInfo.gen.SetPxPyPzE(genLep->px(), genLep->py(), genLep->pz(), genLep->energy());
@@ -762,6 +762,7 @@ bool llvvObjectProducers::filter(edm::Event& iEvent, const edm::EventSetup &iSet
 		   tauInfo.ecalEnergy                   = (tau->leadPFChargedHadrCand().isNonnull() ? tau->leadPFChargedHadrCand()->ecalEnergy() : 0.);
 		   tauInfo.emfraction                   = tau->emFraction();
 
+                   tauInfo.idbits  = 0;
 		   tauInfo.idbits += tau->tauID("decayModeFinding"                           )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::decayModeFinding;
 		   tauInfo.idbits += tau->tauID("byVLooseCombinedIsolationDeltaBetaCorr"     )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::byVLooseCombinedIsolationDeltaBetaCorr;
 		   tauInfo.idbits += tau->tauID("byLooseCombinedIsolationDeltaBetaCorr"      )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::byLooseCombinedIsolationDeltaBetaCorr;
@@ -796,6 +797,7 @@ bool llvvObjectProducers::filter(edm::Event& iEvent, const edm::EventSetup &iSet
 		   tauInfo.idbits += tau->tauID("byLooseIsolationMVA2"                       )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::byLooseIsolationMVA2;
 		   tauInfo.idbits += tau->tauID("byMediumIsolationMVA2"                      )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::byMediumIsolationMVA2;
 		   tauInfo.idbits += tau->tauID("byTightIsolationMVA2"                       )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::byTightIsolationMVA2;
+
 
                    //save charged hadron information
        	           for(unsigned int iCharged=0; iCharged < tau->signalPFChargedHadrCands().size() && iCharged<3; iCharged++){

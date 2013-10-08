@@ -8,6 +8,8 @@
 #include "UserCode/llvv_fwk/interface/LxyAnalysis.h"
 #include "UserCode/llvv_fwk/interface/UEAnalysis.h"
 #include "UserCode/llvv_fwk/interface/BTVAnalysis.h"
+#include "UserCode/llvv_fwk/interface/RAnalysis.h"
+#include "UserCode/llvv_fwk/interface/TopPtWeighter.h"
 #include "UserCode/llvv_fwk/interface/LeptonEfficiencySF.h"
 #include "UserCode/llvv_fwk/interface/MuScleFitCorrector.h"
 
@@ -43,6 +45,7 @@
 
 using namespace std;
 
+//
 int main(int argc, char* argv[])
 {
 	// load framework libraries
@@ -127,7 +130,6 @@ int main(int argc, char* argv[])
 		if(url.Contains("SingleEle")) filterOnlyE=true;
 		if(url.Contains("SingleMu"))  filterOnlyMU=true;
 	}
-
 
 	//
 	// pileup reweighter
