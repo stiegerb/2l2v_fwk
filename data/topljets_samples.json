@@ -239,7 +239,13 @@
             {
                "dtag":"MC8TeV_TTJets_172v5",
                "xsec":245.8,
+               "isinvisible":true,
                "split":5
+            },
+            {
+               "dtag":"MC8TeV_TTJetsSemiLeptMGDecays",
+               "xsec":245.8,
+               "split":10
             }
          ]
       },
@@ -261,6 +267,10 @@
             {
                "dtag":"Data8TeV_SingleMu2012B",
                "split":10
+            },
+            {
+               "dtag":"Data8TeV_SingleMu2012C",
+               "split":2
             }
          ]
       }
