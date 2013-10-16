@@ -251,8 +251,7 @@ int main(int argc, char* argv[])
 	//
 	DataEventSummaryHandler evSummary;
 	if( !evSummary.attach( (TTree *) inF->Get(baseDir+"/data") ) )  { inF->Close();  return -1; }
-	// const Int_t totalEntries=evSummary.getEntries();
-	const Int_t totalEntries=10000;
+	const Int_t totalEntries = evSummary.getEntries();
 
 	float cnorm=1.0;
 	if(isMC){
@@ -569,27 +568,11 @@ int main(int argc, char* argv[])
 
 		// fill different control distributions
 		float charge = 0;
-		if(passSoftLeptonVeto) {
-			controlHistos.fillHisto("njets", ch, selJets.size(), weight);
-		}
-		// charge: pdg id conventions, e.g. +11 = electron, -11 = positron etc.
-		// FIXME: there seems to be a problem concerning the charge... have more W- than W+ which gives negative scale factors...
-		charge = (-1.)*selLeptons[0].get("id")/abs(selLeptons[0].get("id"));
+		if(passSoftLeptonVeto) controlHistos.fillHisto("njets", ch, selJets.size(), weight);
 
-		// FIXME: WJets sample seem to have different convention than rest (e.g. single top), temporary fix:
-		if((url.Contains("WJets") || url.Contains("W1Jets") || url.Contains("W2Jets") || url.Contains("W3Jets") || url.Contains("W4Jets")) && !(url.Contains("TTWJets"))){
-			charge *= -1.;
-		}
-		controlHistos.addHistogram( new TH1F("chargeCheck",";recoCharge * mcCharge;Events",3,-1.5,1.5) );
-		if(isMC){
-			const data::PhysicsObject_t &genParton=selLeptons[0].getObject("gen");
-			int genPartonId=genParton.info.find("id")->second;
-			bool lepton_matched(abs(genPartonId) == abs(selLeptons[0].get("id")));
-			if (lepton_matched){
-				int mc_charge = (-1.)*genPartonId/abs(genPartonId);
-				controlHistos.fillHisto("chargeCheck", ch, charge*mc_charge, weight);
-			}
-		}
+		// Lepton charge
+		charge = selLeptons[0].get("id")/abs(selLeptons[0].get("id"));
+		if( url.Contains("QCDMuPt20") ) charge *= -1.; // only sample with different convention (i.e. in this sample lepton id == pdg id)
 
 		for(size_t icat=0; icat<ctrlCategs.size(); icat++){
 			float iweight(weight);
