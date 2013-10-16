@@ -59,20 +59,26 @@ def makeDirectory(path):
 
 
 def getNormalization(f,chan,tag):
-    h_wjets = mRF.getHist(f,'W+jets/'+tag)
-    h_dyll  = mRF.getHist(f,'Z#rightarrow ll/'+tag)
-    h_stop  = mRF.getHist(f,'Single top/'+tag)
-    h_data  = mRF.getHist(f,'data/'+tag)
-    print '===================================================='
-    print tag
-    print ' total yields:'
-    print 'N(Single top): %9.0f'%h_stop.Integral()
-    print 'N(Drell-Yan) : %9.0f'%h_dyll.Integral()
-    print 'N(Wjets)     : %9.0f (%4.1f%% purity, %4.1f%% agreement) '% (h_wjets.Integral(), 100*h_wjets.Integral()/(h_wjets.Integral()+h_dyll.Integral()+h_stop.Integral()), 100*h_wjets.Integral()/h_data.Integral())
-    print '----------------------------------------------------'
-    print 'N(data)      : %9.0f'%h_data.Integral()
-
-
+    h_wjets  = mRF.getHist(f,'W+jets/'+tag)
+    h_dyll   = mRF.getHist(f,'Z#rightarrow ll/'+tag)
+    h_stop   = mRF.getHist(f,'Single top/'+tag)
+    h_ttbar  = mRF.getHist(f, 't#bar{t}172.5/'+tag)
+    h_others = mRF.getHist(f, 'QCD/'+tag)
+    h_others.Add(mRF.getHist(f, 'other t#bar{t}/'+tag))
+    h_others.Add(mRF.getHist(f, 'VV/'+tag))
+    h_data   = mRF.getHist(f,'data/'+tag)
+    mcsum = h_wjets.Integral()+h_stop.Integral()+h_dyll.Integral()+h_others.Integral()+h_ttbar.Integral()
+    print '========================================================================='
+    print ' %-25s ' % tag
+    print '-----------------------------'
+    print ' %16s | %8.0f    (total yields)' % ('Single Top', h_stop.Integral())
+    print ' %16s | %8.0f ' % ('Drell-Yan', h_dyll.Integral())
+    print ' %16s | %8.0f ' % ('QCD, VV, ttW/Z', h_others.Integral())
+    print ' %16s | %8.0f ' % ('ttbar', h_ttbar.Integral())
+    print ' %16s | %8.0f ' % ('W+jets', h_wjets.Integral())
+    print '-----------------------------'
+    print ' %16s | %8.0f ' % ('Sum MC', mcsum)
+    print ' %16s | %8.0f ' % ('Data', h_data.Integral())
 
     ## sum single top to it
     # st_samples = ['T_s-channel','T_t-channel','T_tW-channel','Tbar_s-channel','Tbar_t-channel','Tbar_tW-channel']
@@ -109,7 +115,8 @@ def getNormalization(f,chan,tag):
     # n_uncorr = h_wjets.Integral(0,4) ## Juerg?
     weight = float(h_wjets.Integral())/n_uncorr ## is always == 1.0?
 
-    w_sf = n_corr/n_uncorr
+    ## We're scaling actually the DIFFERENCE, not the asymmetry
+    w_sf   = (n_data_plus-n_data_minus) / (n_mc_plus-n_mc_minus) ## == n_corr/n_uncorr
     w_frac = n_corr / (n_data_plus+n_data_minus)  ## Equal to a_data/a_mc
 
     ## Errors
@@ -132,20 +139,20 @@ def getNormalization(f,chan,tag):
     n_uncorr_err = sqrt(h_wjets.Integral())*weight
     w_sf_err = w_sf * sqrt(pow(n_uncorr_err/n_uncorr,2)+pow(n_corr_err/n_corr,2))
 
-    print '-------------------------------------------------------------------------'
-    print ' sample  |    N+ (/10^3)      |     N- (/10^3)     |     Asymmetry      |'
-    print '-------------------------------------------------------------------------'
-    print ' Wjets   | %9.2f +- %5.2f | %9.2f +- %5.2f | %7.4f +- %7.4f |' % ( n_mc_plus/1e3, n_mc_plus_err/1e3, n_mc_minus/1e3, n_mc_minus_err/1e3, a_mc, a_mc_err)
-    print ' Bkg     | %9.2f +- %5.2f | %9.2f +- %5.2f | %7.4f +- %7.4f |' % ( n_bkg_plus/1e3, n_bkg_plus_err/1e3, n_bkg_minus/1e3, n_bkg_minus_err/1e3, a_bkg, a_bkg_err)
-    print ' Data    | %9.2f +- %5.2f | %9.2f +- %5.2f | %7.4f +- %7.4f |' % ( n_data_plus/1e3, n_data_plus_err/1e3, n_data_minus/1e3, n_data_minus_err/1e3, a_data, a_data_err)
-    print '-------------------------------------------------------------------------'
-    print ' Ncorr   | %9.2f +- %5.2f' % (n_corr/1e3, n_corr_err/1e3)
-    print ' Nuncorr | %9.2f +- %5.2f' % (n_uncorr/1e3, n_uncorr_err/1e3)
-    print '-----------------------------------------------------------------------------------'
-    print ' W_sf    |    %6.4f +- %6.4f ' % (w_sf, w_sf_err)
-    print '==================================================================================='
-    print ' Fraction |   %6.4f' % w_frac
-    print '-----------------------------------------------------------------------------------'
+    print '-------------------------------------------------------------------'
+    print ' sample  |  N+       |  N-       |  N+ - N-  |     Asymmetry      |'
+    print '-------------------------------------------------------------------'
+    print ' Wjets   | %9.0f | %9.0f | %9.0f | %7.4f +- %7.4f |' % ( n_mc_plus,   n_mc_minus,   (n_mc_plus -n_mc_minus),    a_mc,   a_mc_err)
+    print ' Bkg     | %9.0f | %9.0f | %9.0f | %7.4f +- %7.4f |' % ( n_bkg_plus,  n_bkg_minus,  (n_bkg_plus-n_bkg_minus),   a_bkg,  a_bkg_err)
+    print ' Data    | %9.0f | %9.0f | %9.0f | %7.4f +- %7.4f |' % ( n_data_plus, n_data_minus, (n_data_plus-n_data_minus), a_data, a_data_err)
+    print '-------------------------------------------------------------------'
+    print ' W_sf    |    %6.3f +- %6.3f ' % (w_sf, w_sf_err)
+    # print '----------------------------------------------------------------'
+    # print ' Ncorr   | (%5.2f +- %5.2f) x 10^3' % (n_corr/1e3, n_corr_err/1e3)
+    print '----------------------------------------------------------------'
+    print ' This SF corresponds to an estimated fraction of Wjets of %5.2f%%' % (w_frac*100)
+    print '    (uncorrected fraction on MC was:                      %5.2f%%' % ((h_wjets.Integral()/mcsum)*100)
+    print '----------------------------------------------------------------'
 
     n_mc = [n_mc_plus, n_mc_minus, n_mc_plus_err, n_mc_minus_err]
     n_data = [n_data_plus, n_data_minus, n_data_plus_err, n_data_minus_err]
@@ -214,7 +221,7 @@ def main():
             sf = getNormalization(i_file,chan,chan+'_'+level)
             sfs[chan+'_'+level.replace('charge','')] = sf
 
-    pprint(sfs)
+    # pprint(sfs)
 
     ## write weights to a root file
     sf_hist = TH1F('wjetssf','wjetssf',len(sfs),0,len(sfs))
