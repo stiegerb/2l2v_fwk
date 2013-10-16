@@ -59,11 +59,18 @@ def makeDirectory(path):
 
 
 def getNormalization(f,chan,tag):
-
     h_wjets = mRF.getHist(f,'W+jets/'+tag)
+    h_dyll  = mRF.getHist(f,'Z#rightarrow ll/'+tag)
+    h_stop  = mRF.getHist(f,'Single top/'+tag)
     h_data  = mRF.getHist(f,'data/'+tag)
-
-    print tag,h_wjets.Integral(),h_data.Integral()
+    print '===================================================='
+    print tag
+    print ' total yields:'
+    print 'N(Single top): %9.0f'%h_stop.Integral()
+    print 'N(Drell-Yan) : %9.0f'%h_dyll.Integral()
+    print 'N(Wjets)     : %9.0f (%4.1f%% purity, %4.1f%% agreement) '% (h_wjets.Integral(), 100*h_wjets.Integral()/(h_wjets.Integral()+h_dyll.Integral()+h_stop.Integral()), 100*h_wjets.Integral()/h_data.Integral())
+    print '----------------------------------------------------'
+    print 'N(data)      : %9.0f'%h_data.Integral()
 
 
 
@@ -82,56 +89,63 @@ def getNormalization(f,chan,tag):
     #     h_wjets.Add(h_st)
 
 
+    ## Yields
     n_mc_plus    = h_wjets.GetBinContent(3)
     n_mc_minus   = h_wjets.GetBinContent(1)
+    n_bkg_plus   = h_dyll.GetBinContent(3)+h_stop.GetBinContent(3)
+    n_bkg_minus  = h_dyll.GetBinContent(1)+h_stop.GetBinContent(1)
     n_data_plus  = h_data.GetBinContent(3)
     n_data_minus = h_data.GetBinContent(1)
-    a_mc   = float(n_mc_plus-n_mc_minus)/float(n_mc_plus+n_mc_minus)
-    n_corr = float(n_data_plus-n_data_minus) / a_mc
 
+    ## Asymmetries
+    a_mc   = float(n_mc_plus-n_mc_minus)/float(n_mc_plus+n_mc_minus)
+    a_bkg  = float(n_bkg_plus-n_bkg_minus)/float(n_bkg_plus+n_bkg_minus)
     a_data = float(n_data_plus-n_data_minus)/float(n_data_plus+n_data_minus)
 
-    ## error
+    ## Scale factors
+    n_corr = float(n_data_plus-n_data_minus) / a_mc
+
+    n_uncorr = n_mc_plus+n_mc_minus
+    # n_uncorr = h_wjets.Integral(0,4) ## Juerg?
+    weight = float(h_wjets.Integral())/n_uncorr ## is always == 1.0?
+
+    w_sf = n_corr/n_uncorr
+    w_frac = n_corr / (n_data_plus+n_data_minus)  ## Equal to a_data/a_mc
+
+    ## Errors
     n_mc_plus_err    = h_wjets.GetBinError(3)
     n_mc_minus_err   = h_wjets.GetBinError(1)
+    n_bkg_plus_err   = sqrt(pow(h_dyll.GetBinError(3),2)+pow(h_stop.GetBinError(3),2))
+    n_bkg_minus_err  = sqrt(pow(h_dyll.GetBinError(1),2)+pow(h_stop.GetBinError(1),2))
     n_data_plus_err  = h_data.GetBinError(3)
     n_data_minus_err = h_data.GetBinError(1)
 
     sum_mc_err   = sqrt(pow(n_mc_plus_err,2)+pow(n_mc_minus_err,2))
     sum_data_err = sqrt(pow(n_data_plus_err,2)+pow(n_data_minus_err,2))
+    sum_bkg_err  = sqrt(pow(n_data_plus_err,2)+pow(n_data_minus_err,2))
 
-    a_mc_err   = a_mc * sqrt(pow((sum_mc_err/float(n_mc_plus-n_mc_minus)),2)+pow((sum_mc_err/float(n_mc_plus+n_mc_minus)),2))
+    a_mc_err   = a_mc   * sqrt(pow((sum_mc_err  /float(n_mc_plus-n_mc_minus)),2)    +pow((sum_mc_err  /float(n_mc_plus+n_mc_minus)),2))
+    a_bkg_err  = a_bkg  * sqrt(pow((sum_bkg_err /float(n_bkg_plus-n_bkg_minus)),2)  +pow((sum_bkg_err /float(n_bkg_plus+n_bkg_minus)),2))
+    a_data_err = a_data * sqrt(pow((sum_data_err/float(n_data_plus-n_data_minus)),2)+pow((sum_data_err/float(n_data_plus+n_data_minus)),2))
+
     n_corr_err = n_corr * sqrt(pow(sum_data_err/float(n_data_plus-n_data_minus),2)+pow(a_mc_err/a_mc,2))
-
-    a_data_err   = a_data * sqrt(pow((sum_data_err/float(n_data_plus-n_data_minus)),2)+pow((sum_data_err/float(n_data_plus+n_data_minus)),2))
-
-
-
-    ##
-    n_uncorr = h_wjets.Integral(0,4)
-    weight = float(h_wjets.Integral())/n_uncorr
     n_uncorr_err = sqrt(h_wjets.Integral())*weight
-
-    w_sf = n_corr/n_uncorr
     w_sf_err = w_sf * sqrt(pow(n_uncorr_err/n_uncorr,2)+pow(n_corr_err/n_corr,2))
 
-    w_frac = n_corr / (n_data_plus+n_data_minus)
-
-    print '-----------------------------------------------------'
-    print 'N+(MC)  : %10.2f +- %5.2f' % (n_mc_plus, n_mc_plus_err)
-    print 'N-(MC)  : %10.2f +- %5.2f' % (n_mc_minus, n_mc_minus_err)
-    print 'N+(data): %10.0f +- %5.2f' % (n_data_plus, n_data_plus_err)
-    print 'N-(data): %10.0f +- %5.2f' % (n_data_minus, n_data_minus_err)
-    print 'A (MC)  :  %9.4f +- %6.4f' % (a_mc, a_mc_err)
-    print 'A (data):  %9.4f +- %6.4f' % (a_data, a_data_err)
-    print '----------------------------------------------------'
-    print 'Ncorr   : %10.2f +- %5.2f' % (n_corr, n_corr_err)
-    print 'Nuncorr : %10.2f +- %5.2f' % (n_uncorr, n_uncorr_err)
-    print '----------------------------------------------------'
-    print 'W_sf    :  %9.4f +- %9.4f ' % (w_sf, w_sf_err)
-    print '===================================================='
-    print 'Fraction: ', w_frac
-    print '----------------------------------------------------'
+    print '-------------------------------------------------------------------------'
+    print ' sample  |    N+ (/10^3)      |     N- (/10^3)     |     Asymmetry      |'
+    print '-------------------------------------------------------------------------'
+    print ' Wjets   | %9.2f +- %5.2f | %9.2f +- %5.2f | %7.4f +- %7.4f |' % ( n_mc_plus/1e3, n_mc_plus_err/1e3, n_mc_minus/1e3, n_mc_minus_err/1e3, a_mc, a_mc_err)
+    print ' Bkg     | %9.2f +- %5.2f | %9.2f +- %5.2f | %7.4f +- %7.4f |' % ( n_bkg_plus/1e3, n_bkg_plus_err/1e3, n_bkg_minus/1e3, n_bkg_minus_err/1e3, a_bkg, a_bkg_err)
+    print ' Data    | %9.2f +- %5.2f | %9.2f +- %5.2f | %7.4f +- %7.4f |' % ( n_data_plus/1e3, n_data_plus_err/1e3, n_data_minus/1e3, n_data_minus_err/1e3, a_data, a_data_err)
+    print '-------------------------------------------------------------------------'
+    print ' Ncorr   | %9.2f +- %5.2f' % (n_corr/1e3, n_corr_err/1e3)
+    print ' Nuncorr | %9.2f +- %5.2f' % (n_uncorr/1e3, n_uncorr_err/1e3)
+    print '-----------------------------------------------------------------------------------'
+    print ' W_sf    |    %6.4f +- %6.4f ' % (w_sf, w_sf_err)
+    print '==================================================================================='
+    print ' Fraction |   %6.4f' % w_frac
+    print '-----------------------------------------------------------------------------------'
 
     n_mc = [n_mc_plus, n_mc_minus, n_mc_plus_err, n_mc_minus_err]
     n_data = [n_data_plus, n_data_minus, n_data_plus_err, n_data_minus_err]
@@ -139,9 +153,8 @@ def getNormalization(f,chan,tag):
     a_data = [a_data, a_data_err]
     n_corr = [n_corr, n_corr_err]
     n_uncorr = [n_uncorr, n_uncorr]
-    sf = [w_sf, w_sf_err]
 
-    return sf
+    return [w_sf, w_sf_err]
 
     # writeToFile(tag,n_data, n_mc, a_mc, a_data, n_corr, n_uncorr, sf)
 
