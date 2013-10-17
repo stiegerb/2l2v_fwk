@@ -63,9 +63,12 @@ def getNormalization(f,chan,tag):
     h_dyll   = mRF.getHist(f,'Z#rightarrow ll/'+tag)
     h_stop   = mRF.getHist(f,'Single top/'+tag)
     h_ttbar  = mRF.getHist(f, 't#bar{t}172.5/'+tag)
-    h_others = mRF.getHist(f, 'QCD/'+tag)
-    h_others.Add(mRF.getHist(f, 'other t#bar{t}/'+tag))
-    h_others.Add(mRF.getHist(f, 'VV/'+tag))
+    h_qcd    = mRF.getHist(f, 'QCD/'+tag)
+    h_vv     = mRF.getHist(f, 'VV/'+tag)
+    h_ttv    = mRF.getHist(f, 'other t#bar{t}/'+tag)
+    h_others = h_qcd.Clone("others")
+    h_others.Add(h_vv)
+    h_others.Add(h_ttv)
     h_data   = mRF.getHist(f,'data/'+tag)
     mcsum = h_wjets.Integral()+h_stop.Integral()+h_dyll.Integral()+h_others.Integral()+h_ttbar.Integral()
     print '========================================================================='
@@ -73,7 +76,9 @@ def getNormalization(f,chan,tag):
     print '-----------------------------'
     print ' %16s | %8.0f    (total yields)' % ('Single Top', h_stop.Integral())
     print ' %16s | %8.0f ' % ('Drell-Yan', h_dyll.Integral())
-    print ' %16s | %8.0f ' % ('QCD, VV, ttW/Z', h_others.Integral())
+    print ' %16s | %8.0f ' % ('QCD',   h_qcd.Integral())
+    print ' %16s | %8.0f ' % ('VV',    h_vv.Integral())
+    print ' %16s | %8.0f ' % ('ttW/Z', h_ttv.Integral())
     print ' %16s | %8.0f ' % ('ttbar', h_ttbar.Integral())
     print ' %16s | %8.0f ' % ('W+jets', h_wjets.Integral())
     print '-----------------------------'
@@ -96,55 +101,80 @@ def getNormalization(f,chan,tag):
 
 
     ## Yields
-    n_mc_plus    = h_wjets.GetBinContent(3)
-    n_mc_minus   = h_wjets.GetBinContent(1)
-    n_bkg_plus   = h_dyll.GetBinContent(3)+h_stop.GetBinContent(3)
-    n_bkg_minus  = h_dyll.GetBinContent(1)+h_stop.GetBinContent(1)
-    n_data_plus  = h_data.GetBinContent(3)
-    n_data_minus = h_data.GetBinContent(1)
+    n_wjets_plus   = h_wjets.GetBinContent(3)
+    n_wjets_minus  = h_wjets.GetBinContent(1)
+    n_data_plus    = h_data.GetBinContent(3)
+    n_data_minus   = h_data.GetBinContent(1)
+
+    n_dyll_plus    = h_dyll.GetBinContent(3)
+    n_dyll_minus   = h_dyll.GetBinContent(1)
+    n_stop_plus    = h_stop.GetBinContent(3)
+    n_stop_minus   = h_stop.GetBinContent(1)
+    n_others_plus  = h_others.GetBinContent(3)
+    n_others_minus = h_others.GetBinContent(1)
+    n_ttbar_plus   = h_ttbar.GetBinContent(3)
+    n_ttbar_minus  = h_ttbar.GetBinContent(1)
 
     ## Asymmetries
-    a_mc   = float(n_mc_plus-n_mc_minus)/float(n_mc_plus+n_mc_minus)
-    a_bkg  = float(n_bkg_plus-n_bkg_minus)/float(n_bkg_plus+n_bkg_minus)
-    a_data = float(n_data_plus-n_data_minus)/float(n_data_plus+n_data_minus)
+    a_wjets  = float(n_wjets_plus-n_wjets_minus)/float(n_wjets_plus+n_wjets_minus)
+    a_data   = float(n_data_plus-n_data_minus)/float(n_data_plus+n_data_minus)
+    a_dyll   = float(n_dyll_plus-n_dyll_minus)/float(n_dyll_plus+n_dyll_minus)
+    a_stop   = float(n_stop_plus-n_stop_minus)/float(n_stop_plus+n_stop_minus)
+    a_others = float(n_others_plus-n_others_minus)/float(n_others_plus+n_others_minus)
+    a_ttbar  = float(n_ttbar_plus-n_ttbar_minus)/float(n_ttbar_plus+n_ttbar_minus)
 
     ## Scale factors
-    n_corr = float(n_data_plus-n_data_minus) / a_mc
+    n_corr = float(n_data_plus-n_data_minus) / a_wjets
 
-    n_uncorr = n_mc_plus+n_mc_minus
+    n_uncorr = n_wjets_plus+n_wjets_minus
     # n_uncorr = h_wjets.Integral(0,4) ## Juerg?
     weight = float(h_wjets.Integral())/n_uncorr ## is always == 1.0?
 
     ## We're scaling actually the DIFFERENCE, not the asymmetry
-    w_sf   = (n_data_plus-n_data_minus) / (n_mc_plus-n_mc_minus) ## == n_corr/n_uncorr
-    w_frac = n_corr / (n_data_plus+n_data_minus)  ## Equal to a_data/a_mc
+    w_sf   = (n_data_plus-n_data_minus) / (n_wjets_plus-n_wjets_minus) ## == n_corr/n_uncorr
+    w_frac = n_corr / (n_data_plus+n_data_minus)  ## Equal to a_data/a_wjets
 
     ## Errors
-    n_mc_plus_err    = h_wjets.GetBinError(3)
-    n_mc_minus_err   = h_wjets.GetBinError(1)
-    n_bkg_plus_err   = sqrt(pow(h_dyll.GetBinError(3),2)+pow(h_stop.GetBinError(3),2))
-    n_bkg_minus_err  = sqrt(pow(h_dyll.GetBinError(1),2)+pow(h_stop.GetBinError(1),2))
-    n_data_plus_err  = h_data.GetBinError(3)
-    n_data_minus_err = h_data.GetBinError(1)
+    n_wjets_plus_err   = h_wjets.GetBinError(3)
+    n_wjets_minus_err  = h_wjets.GetBinError(1)
+    n_data_plus_err    = h_data.GetBinError(3)
+    n_data_minus_err   = h_data.GetBinError(1)
+    n_dyll_plus_err    = h_dyll.GetBinError(3)
+    n_dyll_minus_err   = h_dyll.GetBinError(1)
+    n_stop_plus_err    = h_stop.GetBinError(3)
+    n_stop_minus_err   = h_stop.GetBinError(1)
+    n_others_plus_err  = h_others.GetBinError(3)
+    n_others_minus_err = h_others.GetBinError(1)
+    n_ttbar_plus_err   = h_ttbar.GetBinError(3)
+    n_ttbar_minus_err  = h_ttbar.GetBinError(1)
 
-    sum_mc_err   = sqrt(pow(n_mc_plus_err,2)+pow(n_mc_minus_err,2))
-    sum_data_err = sqrt(pow(n_data_plus_err,2)+pow(n_data_minus_err,2))
-    sum_bkg_err  = sqrt(pow(n_data_plus_err,2)+pow(n_data_minus_err,2))
+    sum_wjets_err   = sqrt(pow(n_wjets_plus_err,2)+pow(n_wjets_minus_err,2))
+    sum_data_err    = sqrt(pow(n_data_plus_err,2)+pow(n_data_minus_err,2))
+    sum_dyll_err    = sqrt(pow(n_dyll_plus_err,2)+pow(n_dyll_minus_err,2))
+    sum_stop_err    = sqrt(pow(n_stop_plus_err,2)+pow(n_stop_minus_err,2))
+    sum_others_err  = sqrt(pow(n_others_plus_err,2)+pow(n_others_minus_err,2))
+    sum_ttbar_err   = sqrt(pow(n_ttbar_plus_err,2)+pow(n_ttbar_minus_err,2))
 
-    a_mc_err   = a_mc   * sqrt(pow((sum_mc_err  /float(n_mc_plus-n_mc_minus)),2)    +pow((sum_mc_err  /float(n_mc_plus+n_mc_minus)),2))
-    a_bkg_err  = a_bkg  * sqrt(pow((sum_bkg_err /float(n_bkg_plus-n_bkg_minus)),2)  +pow((sum_bkg_err /float(n_bkg_plus+n_bkg_minus)),2))
-    a_data_err = a_data * sqrt(pow((sum_data_err/float(n_data_plus-n_data_minus)),2)+pow((sum_data_err/float(n_data_plus+n_data_minus)),2))
+    a_wjets_err   = a_wjets   * sqrt(pow((sum_wjets_err  /float(n_wjets_plus-n_wjets_minus)),2)    +pow((sum_wjets_err  /float(n_wjets_plus+n_wjets_minus)),2))
+    a_data_err    = a_data    * sqrt(pow((sum_data_err/float(n_data_plus-n_data_minus)),2)+pow((sum_data_err/float(n_data_plus+n_data_minus)),2))
+    a_dyll_err    = a_dyll    * sqrt(pow((sum_dyll_err /float(n_dyll_plus-n_dyll_minus)),2)  +pow((sum_dyll_err /float(n_dyll_plus+n_dyll_minus)),2))
+    a_stop_err    = a_stop    * sqrt(pow((sum_stop_err /float(n_stop_plus-n_stop_minus)),2)  +pow((sum_stop_err /float(n_stop_plus+n_stop_minus)),2))
+    a_others_err  = a_others  * sqrt(pow((sum_others_err /float(n_others_plus-n_others_minus)),2)  +pow((sum_others_err /float(n_others_plus+n_others_minus)),2))
+    a_ttbar_err   = a_ttbar   * sqrt(pow((sum_ttbar_err /float(n_ttbar_plus-n_ttbar_minus)),2)  +pow((sum_ttbar_err /float(n_ttbar_plus+n_ttbar_minus)),2))
 
-    n_corr_err = n_corr * sqrt(pow(sum_data_err/float(n_data_plus-n_data_minus),2)+pow(a_mc_err/a_mc,2))
+    n_corr_err = n_corr * sqrt(pow(sum_data_err/float(n_data_plus-n_data_minus),2)+pow(a_wjets_err/a_wjets,2))
     n_uncorr_err = sqrt(h_wjets.Integral())*weight
     w_sf_err = w_sf * sqrt(pow(n_uncorr_err/n_uncorr,2)+pow(n_corr_err/n_corr,2))
 
     print '-------------------------------------------------------------------'
     print ' sample  |  N+       |  N-       |  N+ - N-  |     Asymmetry      |'
     print '-------------------------------------------------------------------'
-    print ' Wjets   | %9.0f | %9.0f | %9.0f | %7.4f +- %7.4f |' % ( n_mc_plus,   n_mc_minus,   (n_mc_plus -n_mc_minus),    a_mc,   a_mc_err)
-    print ' Bkg     | %9.0f | %9.0f | %9.0f | %7.4f +- %7.4f |' % ( n_bkg_plus,  n_bkg_minus,  (n_bkg_plus-n_bkg_minus),   a_bkg,  a_bkg_err)
-    print ' Data    | %9.0f | %9.0f | %9.0f | %7.4f +- %7.4f |' % ( n_data_plus, n_data_minus, (n_data_plus-n_data_minus), a_data, a_data_err)
+    print ' Wjets   | %9.0f | %9.0f | %9.0f | %7.4f +- %7.4f |' % ( n_wjets_plus,  n_wjets_minus,  (n_wjets_plus -n_wjets_minus),  a_wjets, a_wjets_err)
+    print ' ttbar   | %9.0f | %9.0f | %9.0f | %7.4f +- %7.4f |' % ( n_ttbar_plus,  n_ttbar_minus,  (n_ttbar_plus-n_ttbar_minus),   a_ttbar,  a_ttbar_err)
+    print ' s-top   | %9.0f | %9.0f | %9.0f | %7.4f +- %7.4f |' % ( n_stop_plus,   n_stop_minus,   (n_stop_plus-n_stop_minus),     a_stop,  a_stop_err)
+    print ' DY+jets | %9.0f | %9.0f | %9.0f | %7.4f +- %7.4f |' % ( n_dyll_plus,   n_dyll_minus,   (n_dyll_plus-n_dyll_minus),     a_dyll,  a_dyll_err)
+    print ' others  | %9.0f | %9.0f | %9.0f | %7.4f +- %7.4f |' % ( n_others_plus, n_others_minus, (n_others_plus-n_others_minus), a_others,  a_others_err)
+    print ' Data    | %9.0f | %9.0f | %9.0f | %7.4f +- %7.4f |' % ( n_data_plus,   n_data_minus,   (n_data_plus-n_data_minus),     a_data, a_data_err)
     print '-------------------------------------------------------------------'
     print ' W_sf    |    %6.3f +- %6.3f ' % (w_sf, w_sf_err)
     # print '----------------------------------------------------------------'
@@ -154,16 +184,16 @@ def getNormalization(f,chan,tag):
     print '    (uncorrected fraction on MC was:                      %5.2f%%' % ((h_wjets.Integral()/mcsum)*100)
     print '----------------------------------------------------------------'
 
-    n_mc = [n_mc_plus, n_mc_minus, n_mc_plus_err, n_mc_minus_err]
+    n_wjets = [n_wjets_plus, n_wjets_minus, n_wjets_plus_err, n_wjets_minus_err]
     n_data = [n_data_plus, n_data_minus, n_data_plus_err, n_data_minus_err]
-    a_mc = [a_mc, a_mc_err]
+    a_wjets = [a_wjets, a_wjets_err]
     a_data = [a_data, a_data_err]
     n_corr = [n_corr, n_corr_err]
     n_uncorr = [n_uncorr, n_uncorr]
 
     return [w_sf, w_sf_err]
 
-    # writeToFile(tag,n_data, n_mc, a_mc, a_data, n_corr, n_uncorr, sf)
+    # writeToFile(tag,n_data, n_wjets, a_wjets, a_data, n_corr, n_uncorr, sf)
 
 def writeToFile(tag,n_data, n_mc, a_mc, a_data, n_corr, n_uncorr, sf):
     outfile = open(tag+'.txt','w')
