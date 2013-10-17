@@ -252,6 +252,7 @@ int main(int argc, char* argv[])
 	DataEventSummaryHandler evSummary;
 	if( !evSummary.attach( (TTree *) inF->Get(baseDir+"/data") ) )  { inF->Close();  return -1; }
 	const Int_t totalEntries = evSummary.getEntries();
+	// const Int_t totalEntries = 100000;
 
 	float cnorm=1.0;
 	if(isMC){
@@ -571,8 +572,9 @@ int main(int argc, char* argv[])
 		if(passSoftLeptonVeto) controlHistos.fillHisto("njets", ch, selJets.size(), weight);
 
 		// Lepton charge
-		charge = selLeptons[0].get("id")/abs(selLeptons[0].get("id"));
-		if( url.Contains("QCDMuPt20") ) charge *= -1.; // only sample with different convention (i.e. in this sample lepton id == pdg id)
+		charge = -1.* selLeptons[0].get("id")/abs(selLeptons[0].get("id"));
+		if( isMC && !url.Contains("QCDMuPt20") ) charge *= -1.; // only sample with different convention (i.e. in this sample lepton id == pdg id)
+		if( url.Contains("SingleMu2012B"))       charge *= -1.;
 
 		for(size_t icat=0; icat<ctrlCategs.size(); icat++){
 			float iweight(weight);
