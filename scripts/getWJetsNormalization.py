@@ -58,7 +58,7 @@ def makeDirectory(path):
         print 'directory '+path+' already exists'
 
 
-def getNormalization(f,chan,tag):
+def getNormalization(f,chan,tag,verbose=0):
     h_wjets  = mRF.getHist(f,'W+jets/'+tag)
     h_dyll   = mRF.getHist(f,'Z#rightarrow ll/'+tag)
     h_stop   = mRF.getHist(f,'Single top/'+tag)
@@ -70,20 +70,21 @@ def getNormalization(f,chan,tag):
     h_others.Add(h_vv)
     h_others.Add(h_ttv)
     h_data   = mRF.getHist(f,'data/'+tag)
-    mcsum = h_wjets.Integral()+h_stop.Integral()+h_dyll.Integral()+h_others.Integral()+h_ttbar.Integral()
-    print '========================================================================='
-    print ' %-25s ' % tag
-    print '-----------------------------'
-    print ' %16s | %8.0f    (total yields)' % ('Single Top', h_stop.Integral())
-    print ' %16s | %8.0f ' % ('Drell-Yan', h_dyll.Integral())
-    print ' %16s | %8.0f ' % ('QCD',   h_qcd.Integral())
-    print ' %16s | %8.0f ' % ('VV',    h_vv.Integral())
-    print ' %16s | %8.0f ' % ('ttW/Z', h_ttv.Integral())
-    print ' %16s | %8.0f ' % ('ttbar', h_ttbar.Integral())
-    print ' %16s | %8.0f ' % ('W+jets', h_wjets.Integral())
-    print '-----------------------------'
-    print ' %16s | %8.0f ' % ('Sum MC', mcsum)
-    print ' %16s | %8.0f ' % ('Data', h_data.Integral())
+    mcsum = h_wjets.Integral()+h_stop.Integral()+h_dyll.Integral()+h_qcd.Integral()+h_vv.Integral()+h_ttv.Integral()+h_ttbar.Integral()
+    if verbose > 0:
+        print '========================================================================='
+        print ' %-25s ' % tag
+        print '-----------------------------'
+        print ' %16s | %8.0f    (total yields)' % ('Single Top', h_stop.Integral())
+        print ' %16s | %8.0f ' % ('Drell-Yan', h_dyll.Integral())
+        print ' %16s | %8.0f ' % ('QCD',   h_qcd.Integral())
+        print ' %16s | %8.0f ' % ('VV',    h_vv.Integral())
+        print ' %16s | %8.0f ' % ('ttW/Z', h_ttv.Integral())
+        print ' %16s | %8.0f ' % ('ttbar', h_ttbar.Integral())
+        print ' %16s | %8.0f ' % ('W+jets', h_wjets.Integral())
+        print '-----------------------------'
+        print ' %16s | %8.0f ' % ('Sum MC', mcsum)
+        print ' %16s | %8.0f ' % ('Data', h_data.Integral())
 
     ## sum single top to it
     # st_samples = ['T_s-channel','T_t-channel','T_tW-channel','Tbar_s-channel','Tbar_t-channel','Tbar_tW-channel']
@@ -166,23 +167,27 @@ def getNormalization(f,chan,tag):
     n_uncorr_err = sqrt(h_wjets.Integral())*weight
     w_sf_err = w_sf * sqrt(pow(n_uncorr_err/n_uncorr,2)+pow(n_corr_err/n_corr,2))
 
-    print '-------------------------------------------------------------------'
-    print ' sample  |  N+       |  N-       |  N+ - N-  |     Asymmetry      |'
-    print '-------------------------------------------------------------------'
-    print ' Wjets   | %9.0f | %9.0f | %9.0f | %7.4f +- %7.4f |' % ( n_wjets_plus,  n_wjets_minus,  (n_wjets_plus -n_wjets_minus),  a_wjets, a_wjets_err)
-    print ' ttbar   | %9.0f | %9.0f | %9.0f | %7.4f +- %7.4f |' % ( n_ttbar_plus,  n_ttbar_minus,  (n_ttbar_plus-n_ttbar_minus),   a_ttbar,  a_ttbar_err)
-    print ' s-top   | %9.0f | %9.0f | %9.0f | %7.4f +- %7.4f |' % ( n_stop_plus,   n_stop_minus,   (n_stop_plus-n_stop_minus),     a_stop,  a_stop_err)
-    print ' DY+jets | %9.0f | %9.0f | %9.0f | %7.4f +- %7.4f |' % ( n_dyll_plus,   n_dyll_minus,   (n_dyll_plus-n_dyll_minus),     a_dyll,  a_dyll_err)
-    print ' others  | %9.0f | %9.0f | %9.0f | %7.4f +- %7.4f |' % ( n_others_plus, n_others_minus, (n_others_plus-n_others_minus), a_others,  a_others_err)
-    print ' Data    | %9.0f | %9.0f | %9.0f | %7.4f +- %7.4f |' % ( n_data_plus,   n_data_minus,   (n_data_plus-n_data_minus),     a_data, a_data_err)
-    print '-------------------------------------------------------------------'
-    print ' W_sf    |    %6.3f +- %6.3f ' % (w_sf, w_sf_err)
-    # print '----------------------------------------------------------------'
-    # print ' Ncorr   | (%5.2f +- %5.2f) x 10^3' % (n_corr/1e3, n_corr_err/1e3)
-    print '----------------------------------------------------------------'
-    print ' This SF corresponds to an estimated fraction of Wjets of %5.2f%%' % (w_frac*100)
-    print '    (uncorrected fraction on MC was:                      %5.2f%%' % ((h_wjets.Integral()/mcsum)*100)
-    print '----------------------------------------------------------------'
+    if verbose == 0:
+        line = '%-16s : %5.2f+-%4.2f | %9.0f | %9.0f | %7.4f+-%6.4f | %7.4f+-%6.4f | %5.2f%% '
+        print line % (tag[:-7], w_sf, w_sf_err, n_data_plus-n_data_minus, n_wjets_plus-n_wjets_minus, a_data, a_data_err, a_wjets, a_wjets_err, (h_wjets.Integral()/mcsum)*100)
+    if verbose > 0:
+        print '-------------------------------------------------------------------'
+        print ' sample  |  N+       |  N-       |  N+ - N-  |     Asymmetry      |'
+        print '-------------------------------------------------------------------'
+        print ' Wjets   | %9.0f | %9.0f | %9.0f | %7.4f +- %7.4f |' % ( n_wjets_plus,  n_wjets_minus,  (n_wjets_plus -n_wjets_minus),  a_wjets, a_wjets_err)
+        print ' ttbar   | %9.0f | %9.0f | %9.0f | %7.4f +- %7.4f |' % ( n_ttbar_plus,  n_ttbar_minus,  (n_ttbar_plus-n_ttbar_minus),   a_ttbar,  a_ttbar_err)
+        print ' s-top   | %9.0f | %9.0f | %9.0f | %7.4f +- %7.4f |' % ( n_stop_plus,   n_stop_minus,   (n_stop_plus-n_stop_minus),     a_stop,  a_stop_err)
+        print ' DY+jets | %9.0f | %9.0f | %9.0f | %7.4f +- %7.4f |' % ( n_dyll_plus,   n_dyll_minus,   (n_dyll_plus-n_dyll_minus),     a_dyll,  a_dyll_err)
+        print ' others  | %9.0f | %9.0f | %9.0f | %7.4f +- %7.4f |' % ( n_others_plus, n_others_minus, (n_others_plus-n_others_minus), a_others,  a_others_err)
+        print ' Data    | %9.0f | %9.0f | %9.0f | %7.4f +- %7.4f |' % ( n_data_plus,   n_data_minus,   (n_data_plus-n_data_minus),     a_data, a_data_err)
+        print '-------------------------------------------------------------------'
+        print ' W_sf    |    %6.3f +- %6.3f ' % (w_sf, w_sf_err)
+        # print '----------------------------------------------------------------'
+        # print ' Ncorr   | (%5.2f +- %5.2f) x 10^3' % (n_corr/1e3, n_corr_err/1e3)
+        print '----------------------------------------------------------------'
+        print ' This SF corresponds to an estimated fraction of Wjets of %5.2f%%' % (w_frac*100)
+        print '    (uncorrected fraction on MC was:                      %5.2f%%' % ((h_wjets.Integral()/mcsum)*100)
+        print '----------------------------------------------------------------'
 
     n_wjets = [n_wjets_plus, n_wjets_minus, n_wjets_plus_err, n_wjets_minus_err]
     n_data = [n_data_plus, n_data_minus, n_data_plus_err, n_data_minus_err]
@@ -224,7 +229,7 @@ def main():
     parser = optparse.OptionParser(usage)
     parser.add_option('-i', '--inputfile', dest='inputfile' , help='Name of the input fileectory containing the histograms.' , default=None)
     parser.add_option('-b', '--batch'    , dest='batch'     , help='Use this flag to run root in batch mode.'                , action='store_true', default=False)
-
+    parser.add_option('-v', '--verbose'  , dest='verbose'   , help='Verbose level. [default = %default]'                     , action='store', type='int', default=0)
 
     (opt, args) = parser.parse_args()
 
@@ -246,10 +251,15 @@ def main():
     print 'channels: ',channels
     levels = set([k.split('_',1)[-1] for k in mRF.GetKeyNames(i_file,'data') if 'charge' in k and not 'chargeCheck' in k and not len(k.split('_')) == 2])
     print 'levels: ',levels
+    if opt.verbose==0:
+        print '----------------------------------------------------------------------------------------------------'
+        print '                 :     W_sf    | diff data | diff wjets|     A data      |     A wjets     | % Wjets'
+        print '----------------------------------------------------------------------------------------------------'
     for chan in channels:
         for level in levels:
-            sf = getNormalization(i_file,chan,chan+'_'+level)
+            sf = getNormalization(i_file,chan,chan+'_'+level, verbose=opt.verbose)
             sfs[chan+'_'+level.replace('charge','')] = sf
+        if opt.verbose==0: print '----------------------------------------------------------------------------------------------------'
 
     # pprint(sfs)
 
