@@ -10,41 +10,39 @@ import os
 import re
 import optparse
 
-
-
 sys.path.append('../scripts/')
 sys.path.append('scripts/')
 import myRootFunctions as mRF
 
 
 proc_dict = {'VV':'vv',
-             'W+jets':'wjets',
-             'QCD':'qcd',
-             'Z#rightarrow ll':'zjets',
-             'Single top':'singletop',
-             't#bar{t}':'ttbar',
-             't#bar{t}161.5':'ttbar',
-             't#bar{t}163.5':'ttbar',
-             't#bar{t}166.5':'ttbar',
-             't#bar{t}169.5':'ttbar',
-             't#bar{t} 172.5':'ttbar',
-             't#bar{t}172.5':'ttbar',
-             't#bar{t}175.5':'ttbar',
-             't#bar{t}178.5':'ttbar',
-             't#bar{t}181.5':'ttbar',
-             't#bar{t}184.5':'ttbar',
-             't#bar{t}systtunep11':'ttbarsystp11',
-             't#bar{t}systtunep11tev':'ttbarsystp11tev',
-             't#bar{t}systtunep11nocr':'ttbarsystp11nocr',
-             't#bar{t}systtunep11mpihi':'ttbarsystp11mpihi',
-             't#bar{t}systq2down':'ttbarsystq2down',
-             't#bar{t}systq2up':'ttbarsystq2up',
-             't#bar{t}systmepsdown':'ttbarsystmepsdown',
-             't#bar{t}systmepsup':'ttbarsystmepsup',
-             't#bar{t}systpowhegpy':'ttbarsystpowhegpy',
-             't#bar{t}systpowheghw':'ttbarsystpowheghw',
-             'other t#bar{t}':'ttbarV',
-             'data':'data'}
+             'W+jets':                   'wjets',
+             'QCD':                      'qcd',
+             'Z#rightarrow ll':          'zjets',
+             'Single top':               'singletop',
+             't#bar{t}':                 'ttbar',
+             't#bar{t}161.5':            'ttbar',
+             't#bar{t}163.5':            'ttbar',
+             't#bar{t}166.5':            'ttbar',
+             't#bar{t}169.5':            'ttbar',
+             't#bar{t} 172.5':           'ttbar',
+             't#bar{t}172.5':            'ttbar',
+             't#bar{t}175.5':            'ttbar',
+             't#bar{t}178.5':            'ttbar',
+             't#bar{t}181.5':            'ttbar',
+             't#bar{t}184.5':            'ttbar',
+             't#bar{t}systtunep11':      'ttbarsystp11',
+             't#bar{t}systtunep11tev':   'ttbarsystp11tev',
+             't#bar{t}systtunep11nocr':  'ttbarsystp11nocr',
+             't#bar{t}systtunep11mpihi': 'ttbarsystp11mpihi',
+             't#bar{t}systq2down':       'ttbarsystq2down',
+             't#bar{t}systq2up':         'ttbarsystq2up',
+             't#bar{t}systmepsdown':     'ttbarsystmepsdown',
+             't#bar{t}systmepsup':       'ttbarsystmepsup',
+             't#bar{t}systpowhegpy':     'ttbarsystpowhegpy',
+             't#bar{t}systpowheghw':     'ttbarsystpowheghw',
+             'other t#bar{t}':           'ttbarV',
+             'data':                     'data'}
 
 
 
@@ -54,9 +52,9 @@ def main():
 
     usage = 'usage: %prog [options]'
     parser = optparse.OptionParser(usage)
-    parser.add_option('-i', '--inputfile'    ,    dest='inputfile'         , help='Name of the input file containing the histograms.'               , default=None)
-    parser.add_option('-o', '--outputfile'   ,    dest='outputfile'        , help='Name of the output file containing the histograms.'              , default='lxyhist.root')
-    parser.add_option('-b', '--batch'        ,    dest='batch'             , help='Use this flag to run root in batch mode.'            , action='store_true'        , default=False)
+    parser.add_option('-i', '--inputfile' , dest='inputfile'  , help='Name of the input file containing the histograms.' , default=None)
+    parser.add_option('-o', '--outputfile', dest='outputfile' , help='Name of the output file containing the histograms.', default='lxyhist.root')
+    parser.add_option('-b', '--batch'     , dest='batch'      , help='Use this flag to run root in batch mode.'          , default=False, action='store_true')
 
     (opt, args) = parser.parse_args()
 
@@ -78,28 +76,23 @@ def main():
     hists = {}
     for proc in procs:
         keys = [k for k in mRF.GetKeyNames(i_file,proc)]
-        # print keys
 
         for key in keys:
-            if ("geq4" in key or 'presel' in key or 'geq3' in key or 'eq1' in key or 'btag' in key):
-                continue
-            if 'had' in key or 'eta' in key or 'pt' in key or 'sig' in  key:
-                continue
-            if not ('jetlxy' in key or 'secvtxmass' in key):
-                continue
+            ## Select jetlxy or secvtxmass histograms for e and mu channels:
+            try: chan, var = key.split('_', 1)
+            except ValueError: continue
+            if not (chan == 'e'      or chan == 'mu'):         continue
+            if not (var  == 'jetlxy' or var  == 'secvtxmass'): continue
 
-            hist = mRF.getHist(i_file,proc+'/'+key)
-            tags = key.split('_')
-            if len(tags) < 2:
-                continue
-            chan = tags[0]
-            var = tags[1]
-            if 'jet' in var:
+            hist = mRF.getHist(i_file, proc + '/' + key)
+
+            if var == 'jetlxy':
                 var = var.replace('jet','max')
-            if 'secvtx' in var:
+            if var == 'secvtxmass':
                 var = var.replace('secvtx','jet')
-            p = proc_dict[proc]
-            if not 'ttbar' in p:
+
+            ## Extract generated top mass
+            if not 'ttbar' in proc_dict[proc]:
                 mass = '0'
             else:
                 try:
@@ -107,28 +100,23 @@ def main():
                 except IndexError:
                     mass = '1725'
             if mass == '' or 'syst' in mass:
-                    mass = '1725'
-            name = chan+'_'+var+'_'+p+'_'+mass
-            print name
-            hists[name] = hist.Clone(name.replace(' ','')) ## FIXME
+                mass = '1725'
+
+            name = chan+'_'+var+'_'+proc_dict[proc]+'_'+mass
+            # print name
+            hists[name] = hist.Clone() ## FIXME (name.replace(' ',''))
 
     o_file = ROOT.TFile.Open(outputfile,'recreate')
     for chan in channels:
         o_file.mkdir(chan)
-    #print hists
+
     for h in hists:
-        #print h
         channel = h.split('_')[0]
-        if channel == 'e':
-            o_file.cd(channel)
-        elif channel == 'mu':
-            o_file.cd(channel)
-        else:
-            continue
+        if channel == 'e':    o_file.cd(channel)
+        elif channel == 'mu': o_file.cd(channel)
+        else: continue
         hists[h].Write()
     o_file.Close()
-
-
 
 if __name__ == '__main__':
     main()
