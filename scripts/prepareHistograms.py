@@ -43,6 +43,7 @@ proc_dict = {'VV':'vv',
              't#bar{t}systmepsup':'ttbarsystmepsup',
              't#bar{t}systpowhegpy':'ttbarsystpowhegpy',
              't#bar{t}systpowheghw':'ttbarsystpowheghw',
+             'other t#bar{t}':'ttbarV',
              'data':'data'}
 
 
@@ -73,7 +74,6 @@ def main():
 
     channels = ['e','mu']
     procs =  [k for k in mRF.GetKeyNames(i_file,'')]
-
 
     hists = {}
     for proc in procs:
