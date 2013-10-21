@@ -115,6 +115,8 @@ def getNormalization(f,chan,tag,verbose=0):
     n_others_minus = h_others.GetBinContent(1)
     n_ttbar_plus   = h_ttbar.GetBinContent(3)
     n_ttbar_minus  = h_ttbar.GetBinContent(1)
+    n_mc_plus      = n_dyll_plus+n_stop_plus+n_others_plus+n_ttbar_plus #+ n_wjets_plus
+    n_mc_minus     = n_dyll_minus+n_stop_minus+n_others_minus+n_ttbar_minus #+ n_wjets_minus
 
     ## Asymmetries
     a_wjets  = float(n_wjets_plus-n_wjets_minus)/float(n_wjets_plus+n_wjets_minus)
@@ -168,8 +170,8 @@ def getNormalization(f,chan,tag,verbose=0):
     w_sf_err = w_sf * sqrt(pow(n_uncorr_err/n_uncorr,2)+pow(n_corr_err/n_corr,2))
 
     if verbose == 0:
-        line = '%-16s : %5.2f+-%4.2f | %9.0f | %9.0f | %7.4f+-%6.4f | %7.4f+-%6.4f | %5.2f%% '
-        print line % (tag[:-7], w_sf, w_sf_err, n_data_plus-n_data_minus, n_wjets_plus-n_wjets_minus, a_data, a_data_err, a_wjets, a_wjets_err, (h_wjets.Integral()/mcsum)*100)
+        line = '%-16s : %5.2f+-%4.2f | %9.0f | %9.0f | %9.0f | %5.2f+-%4.2f | %5.2f+-%4.2f | %5.2f%% | %5.2f '
+        print line % (tag[:-7], w_sf, w_sf_err, n_data_plus-n_data_minus, n_mc_plus-n_mc_minus, n_wjets_plus-n_wjets_minus, a_data*100, a_data_err*100, a_wjets*100, a_wjets_err*100, (h_wjets.Integral()/mcsum)*100, h_data.Integral()/mcsum)
     if verbose > 0:
         print '-------------------------------------------------------------------'
         print ' sample  |  N+       |  N-       |  N+ - N-  |     Asymmetry      |'
@@ -252,14 +254,15 @@ def main():
     levels = set([k.split('_',1)[-1] for k in mRF.GetKeyNames(i_file,'data') if 'charge' in k and not 'chargeCheck' in k and not len(k.split('_')) == 2])
     print 'levels: ',levels
     if opt.verbose==0:
-        print '----------------------------------------------------------------------------------------------------'
-        print '                 :     W_sf    | diff data | diff wjets|     A data      |     A wjets     | % Wjets'
-        print '----------------------------------------------------------------------------------------------------'
+        print '-----------------------------------------------------------------------------------------------------------------'
+        print '                 :     W_sf    | diff data | diff MC   | diff wjets| A data (%)  | A wjets (%) | %Wjets | data/MC'
+        print '-----------------------------------------------------------------------------------------------------------------'
+
     for chan in channels:
         for level in levels:
             sf = getNormalization(i_file,chan,chan+'_'+level, verbose=opt.verbose)
-            sfs[chan+'_'+level.replace('charge','')] = sf
-        if opt.verbose==0: print '----------------------------------------------------------------------------------------------------'
+            sfs[chan+'_'+level.replace('_charge','')] = sf
+        if opt.verbose==0: print '-----------------------------------------------------------------------------------------------------------------'
 
     # pprint(sfs)
 
