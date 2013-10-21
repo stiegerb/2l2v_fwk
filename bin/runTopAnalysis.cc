@@ -74,6 +74,7 @@ int main(int argc, char* argv[])
 	TString out          = runProcess.getParameter<std::string>("outdir");
 	bool saveSummaryTree = runProcess.getParameter<bool>("saveSummaryTree");
 	std::vector<string>  weightsFile = runProcess.getParameter<std::vector<string> >("weightsFile");
+	int maxEvents     = runProcess.getParameter<int>("maxEvents");
 
 
 	//jet energy scale uncertainties
@@ -104,6 +105,7 @@ int main(int argc, char* argv[])
 	//re-scale qcd
 	std::map<TString,float> qcdSFmap;
 	if(weightsFile.size() && url.Contains("QCD") && isMC){
+		cout << "Reading QCD scale factors..." << endl;
 		TFile *qcdF=TFile::Open(weightsFile[0].c_str());
 		TH1* qcdsfH=(TH1 *)qcdF->Get("qcdsf");
 		for(int ibin=1; ibin<=qcdsfH->GetXaxis()->GetNbins(); ibin++) {
@@ -251,8 +253,10 @@ int main(int argc, char* argv[])
 	//
 	DataEventSummaryHandler evSummary;
 	if( !evSummary.attach( (TTree *) inF->Get(baseDir+"/data") ) )  { inF->Close();  return -1; }
-	const Int_t totalEntries = evSummary.getEntries();
-	// const Int_t totalEntries = 100000;
+	Int_t entries_to_process = -1;
+	if(maxEvents > 0) entries_to_process = maxEvents;
+	else              entries_to_process = evSummary.getEntries();
+	const Int_t totalEntries = entries_to_process;
 
 	float cnorm=1.0;
 	if(isMC){
@@ -572,7 +576,7 @@ int main(int argc, char* argv[])
 		if(passSoftLeptonVeto) controlHistos.fillHisto("njets", ch, selJets.size(), weight);
 
 		// Lepton charge
-		charge = -1.* selLeptons[0].get("id")/abs(selLeptons[0].get("id"));
+		charge = -1.* selLeptons[0].get("id")/abs(selLeptons[0].get("id")); // this will be wrong for all MC except for QCDMuPt20.. and for Data8TeV_SingleMu2012B
 		if( isMC && !url.Contains("QCDMuPt20") ) charge *= -1.; // only sample with different convention (i.e. in this sample lepton id == pdg id)
 		if( url.Contains("SingleMu2012B"))       charge *= -1.;
 
