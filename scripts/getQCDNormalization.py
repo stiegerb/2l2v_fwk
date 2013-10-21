@@ -40,7 +40,7 @@ def getNormalization(i_file,chan,level):
     # wjets = mRF.getHist(i_file, chan+'/'+chan+'_'+level+'_wjets_0').Clone()
     wjets = mRF.getHist(i_file,'W+jets/'+postfix).Clone()
     # ttbar = mRF.getHist(i_file, chan+'/'+chan+'_'+level+'_ttbar_1725').Clone()
-    ttbar = mRF.getHist(i_file,'t#bar{t}/'+postfix).Clone()
+    ttbar = mRF.getHist(i_file,'t#bar{t}172.5/'+postfix).Clone()
     # zjets = mRF.getHist(i_file, chan+'/'+chan+'_'+level+'_zjets_0').Clone()
     zjets = mRF.getHist(i_file,'Z#rightarrow ll/'+postfix).Clone()
     # stop  = mRF.getHist(i_file, chan+'/'+chan+'_'+level+'_singletop_0').Clone()
@@ -56,26 +56,27 @@ def getNormalization(i_file,chan,level):
     mc.Add(stop)
 
     print 'Summary: ',level
-    print '-'*50
-    print 'data     : ',data.Integral()
-    print '-'*50
-    print 'ttbar    : ',ttbar.Integral()
-    print 'singletop: ',stop.Integral()
-    print 'wjets    : ',wjets.Integral()
-    print 'zjets    : ',zjets.Integral()
-    print '-'*50
-    print 'mc sum   : ',mc.Integral()
-    print 'qcd      : ',qcd.Integral()
+    print '-'*25
+    print 'ttbar     : %9.0f' % ttbar.Integral()
+    print 'singletop : %9.0f' % stop.Integral()
+    print 'wjets     : %9.0f' % wjets.Integral()
+    print 'zjets     : %9.0f' % zjets.Integral()
+    print '-'*25
+    print 'mc sum    : %9.0f' % mc.Integral()
+    print 'qcd       : %9.0f' % qcd.Integral()
+    print '-'*25
+    print 'data      : %9.0f' % data.Integral()
+    print '-'*25
 
     frac_start = qcd.Integral(0,qcd.GetNbinsX()+1)/(mc.Integral(0,mc.GetNbinsX()+1)+qcd.Integral(0,qcd.GetNbinsX()+1))
     start = 0.2
-        
+
     frac = RooRealVar('frac','frac',start,0.0,1.)
     met  = RooRealVar('met','met',0.,300.)
     data_shape = RooDataHist('data','data',RooArgList(met),data)
     mc_shape   = RooDataHist('mc_shape','mc_shape',RooArgList(met),mc)
     qcd_shape  = RooDataHist('qcd_shape','qcd_shape',RooArgList(met),qcd)
-    
+
     mc_pdf  = RooHistPdf('mc_pdf' ,'mc_pdf' ,RooArgSet(met),mc_shape)
     qcd_pdf = RooHistPdf('qcd_pdf','qcd_pdf',RooArgSet(met),qcd_shape)
 
@@ -96,7 +97,7 @@ def getNormalization(i_file,chan,level):
     frame.GetXaxis().SetTitle('#slash{E}_{T} [GeV]')
     frame.GetYaxis().SetTitleOffset(2.5)
     frame.Draw()
-    
+
     leg = TLegend(0.6,0.65,0.85,0.85)
     leg.SetFillColor(0)
     leg.SetLineColor(0)
@@ -105,7 +106,7 @@ def getNormalization(i_file,chan,level):
     leg.AddEntry(mc,'t#bar{t},t,W+jets,DY','l')
     leg.AddEntry(qcd,'QCD','l')
     leg.Draw()
-    
+
     pave = TPaveText(0.6,0.5,0.85,0.65,"NDC")
     pave.SetBorderSize(0)
     pave.SetFillStyle(0)
@@ -115,19 +116,19 @@ def getNormalization(i_file,chan,level):
     pave.AddText('#chi^{2}/N_{dof} = %.2f' % frame.chiSquare('model','data'))
     pave.AddText('SF = %.2f' % float(frac.getVal()/frac_start))
     pave.Draw()
-    
-    
-    
+
+
+
     c.Update()
     c.Print('qcd_'+chan+'_'+level+'.png')
     # c.Print('qcd_'+chan+'_'+level+'.eps')
     # c.Print('qcd_'+chan+'_'+level+'.C')
-    
+
     return float(frac.getVal()/frac_start),0.
 
 
 def main():
-    
+
     usage = 'usage: %prog [options]'
     parser = optparse.OptionParser(usage)
     parser.add_option('-i', '--inputfile'    ,    dest='inputfile'         , help='Name of the input file containing the histograms.'             , default=None)
@@ -146,12 +147,14 @@ def main():
     if batch:
         sys.argv.append( '-b' )
         ROOT.gROOT.SetBatch()
-        
+
     i_file = mRF.openTFile(inputfile)
 
     channels = ['e','mu']
     print 'channels: ',channels
-    levels = set([k.split('_')[-1].replace('charge','met') for k in mRF.GetKeyNames(i_file,'data') if 'charge' in k])
+    # levels = set([k.split('_')[-1].replace('charge','met')   for k in mRF.GetKeyNames(i_file,'data') if 'charge' in k])
+    levels = set([k.split('_',1)[-1].replace('charge','met') for k in mRF.GetKeyNames(i_file,'data') if 'charge' in k and not 'chargeCheck' in k and not len(k.split('_')) == 2])
+
     print 'levels: ',levels
 
     sfs = {}
@@ -162,7 +165,7 @@ def main():
                 sfs[chan+'_'+level] = sf
 
 
-    
+
     pprint(sfs)
     ## write weights to a root file
     sf_hist = TH1F('qcdsf','qcdsf',len(sfs),0,len(sfs))
@@ -181,4 +184,4 @@ def main():
 if __name__ == '__main__':
     main()
     print 'done'
-    
+
