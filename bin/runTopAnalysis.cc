@@ -326,13 +326,13 @@ int main(int argc, char* argv[])
 		Hhepup->Fill(ev.nup,1);
 
 		//MC truth
-		data::PhysicsObjectCollection_t gen=evSummary.getPhysicsObject(DataEventSummaryHandler::GENPARTICLES);
+		data::PhysicsObjectCollection_t genParticles=evSummary.getPhysicsObject(DataEventSummaryHandler::GENPARTICLES);
 		bool hasTop(false);
 		int ngenLeptonsStatus3(0);
 		if(isMC){
-			for(size_t igen=0; igen<gen.size(); igen++){
-				if(gen[igen].get("status")!=3) continue;
-				int absid=abs(gen[igen].get("id"));
+			for(size_t igen=0; igen<genParticles.size(); igen++){
+				if(genParticles[igen].get("status")!=3) continue;
+				int absid=abs(genParticles[igen].get("id"));
 				if(absid==6) hasTop=true;
 				if(absid!=11 && absid!=13 && absid!=15) continue;
 				ngenLeptonsStatus3++;
@@ -497,7 +497,7 @@ int main(int argc, char* argv[])
 		data::PhysicsObjectCollection_t recoMet = evSummary.getPhysicsObject(DataEventSummaryHandler::MET);
 		data::PhysicsObjectCollection_t jets    = evSummary.getPhysicsObject(DataEventSummaryHandler::JETS);
 		utils::cmssw::updateJEC(jets,jesCor,totalJESUnc,ev.rho,ev.nvtx,isMC);
-		std::vector<LorentzVector> met = utils::cmssw::getMETvariations(recoMet[0],jets,selLeptons,isMC);
+		std::vector<LorentzVector> missingEt = utils::cmssw::getMETvariations(recoMet[0],jets,selLeptons,isMC);
 
 		//
 		// Jet selection
@@ -612,7 +612,7 @@ int main(int argc, char* argv[])
 
 			// fill control histograms
 			// add corresponding control distributions
-			controlHistos.fillHisto(ctrlCategs[icat]+"met",             ch, met[0].pt(),    iweight);
+			controlHistos.fillHisto(ctrlCategs[icat]+"met",             ch, missingEt[0].pt(),    iweight);
 			controlHistos.fillHisto(ctrlCategs[icat]+"charge",          ch, charge,         iweight);
 			if(ctrlCategs[icat]!="") controlHistos.fillHisto(ctrlCategs[icat]+"njets",  ch, selJets.size(), iweight);
 
@@ -635,7 +635,8 @@ int main(int argc, char* argv[])
 			}
 		}
 
-		if(passSoftLeptonVeto && pass3JetSelection  && pass1BtagSelection) lxyAn.analyze(selLeptons,selJets,met[0],ev.nvtx,gen,weight*wjetsWeight);
+		// Corresponds to geq3jet1btag_  : presel + three or more jets, one or more b-tags
+		if(passSoftLeptonVeto && pass3JetSelection  && pass1BtagSelection) lxyAn.analyze(selLeptons,selJets,missingEt[0],ev.nvtx,genParticles,weight*wjetsWeight);
 
 
 		//select the event
@@ -662,7 +663,7 @@ int main(int argc, char* argv[])
 					float weight( weight*ibtagdyWeight ); // FIXME: check weight
 					controlHistos.fillHisto("ueevtflow", ch, 3, weight*wjetsWeight);
 					data::PhysicsObjectCollection_t pf = evSummary.getPhysicsObject(DataEventSummaryHandler::PFCANDIDATES);
-					// ueAn.analyze(selLeptons,looseJets,met[0],pf,gen,ev.nvtx,weight*wjetsWeight); // FIXME: UE analysis need 2 leptons?
+					// ueAn.analyze(selLeptons,looseJets,missingEt[0],pf,genParticles,ev.nvtx,weight*wjetsWeight); // FIXME: UE analysis need 2 leptons?
 					// if(saveSummaryTree) ueAn.fillSummaryTuple(xsecWeight);
 				}
 			}
@@ -696,7 +697,7 @@ int main(int argc, char* argv[])
 			if(var=="jerup")    metIdx=utils::cmssw::JERUP;   if(var=="jerdown")  metIdx=utils::cmssw::JERDOWN;
 			if(var=="jesup")    metIdx=utils::cmssw::JESUP;   if(var=="jesdown")  metIdx=utils::cmssw::JESDOWN;
 			if(var=="umetup")   metIdx=utils::cmssw::UMETUP;  if(var=="umetdown") metIdx=utils::cmssw::UMETDOWN;
-			LorentzVector iMet=met[metIdx];
+			LorentzVector iMet=missingEt[metIdx];
 			bool passLocalMetSelection(iMet.pt()>40 );
 
 
