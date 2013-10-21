@@ -173,7 +173,6 @@
          "lcolor":2,
          "fill":0,
          "spimpose":true,
-         "mctruthmode":1,
          "data":[
             {
                "dtag":"MC8TeV_TTJets_161v5",
@@ -189,7 +188,6 @@
          "lcolor":2,
          "fill":0,
          "spimpose":true,
-         "mctruthmode":1,
          "data":[
             {
                "dtag":"MC8TeV_TTJets_163v5",
@@ -205,7 +203,6 @@
          "lcolor":2,
          "fill":0,
          "spimpose":true,
-         "mctruthmode":1,
          "data":[
             {
                "dtag":"MC8TeV_TTJets_166v5",
@@ -221,7 +218,6 @@
          "lcolor":2,
          "fill":0,
          "spimpose":true,
-         "mctruthmode":1,
          "data":[
             {
                "dtag":"MC8TeV_TTJets_169v5",
@@ -237,7 +233,6 @@
          "lcolor":2,
          "fill":0,
          "spimpose":true,
-         "mctruthmode":1,
          "data":[
             {
                "dtag":"MC8TeV_TTJets_175v5",
@@ -253,7 +248,6 @@
          "lcolor":2,
          "fill":0,
          "spimpose":true,
-         "mctruthmode":1,
          "data":[
             {
                "dtag":"MC8TeV_TTJets_178v5",
@@ -269,7 +263,6 @@
          "lcolor":2,
          "fill":0,
          "spimpose":true,
-         "mctruthmode":1,
          "data":[
             {
                "dtag":"MC8TeV_TTJets_181v5",
@@ -285,7 +278,6 @@
          "lcolor":2,
          "fill":0,
          "spimpose":true,
-         "mctruthmode":1,
          "data":[
             {
                "dtag":"MC8TeV_TTJets_184v5",
