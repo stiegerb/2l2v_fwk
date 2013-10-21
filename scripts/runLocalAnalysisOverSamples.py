@@ -19,7 +19,7 @@ def getByLabel(desc,key,defaultVal=None) :
 #configure
 usage = 'usage: %prog [options]'
 parser = optparse.OptionParser(usage)
-parser.add_option('-e', '--exe'        ,    dest='theExecutable'      , help='excecutable'                           , default='')
+parser.add_option('-e', '--exe'        ,    dest='theExecutable'      , help='executable'                            , default='')
 parser.add_option('-s', '--sub'        ,    dest='queue'              , help='batch queue'                           , default='')
 parser.add_option('-R', '--R'          ,    dest='requirementtoBatch' , help='requirement for batch queue'           , default='pool>30000')
 parser.add_option('-j', '--json'       ,    dest='samplesDB'          , help='samples json file'                     , default='')
@@ -34,13 +34,14 @@ scriptFile=os.path.expandvars('${CMSSW_BASE}/bin/${SCRAM_ARCH}/wrapLocalAnalysis
 
 split=1
 segment=0
-                                        
+
 #open the file which describes the sample
 jsonFile = open(opt.samplesDB,'r')
 procList=json.load(jsonFile,encoding='utf-8').items()
 
 FarmDirectory                      = opt.outdir+"/FARM"
 JobName                            = opt.theExecutable
+if opt.onlytag != 'all': JobName += ('_%s' % opt.onlytag)
 LaunchOnCondor.Jobs_RunHere        = 1
 LaunchOnCondor.Jobs_Queue          = opt.queue
 LaunchOnCondor.Jobs_LSFRequirement = '"'+opt.requirementtoBatch+'"'
@@ -65,13 +66,13 @@ for proc in procList :
             suffix = str(getByLabel(d,'suffix' ,""))
             if opt.onlytag!='all' and dtag.find(opt.onlytag)<0 : continue
             if mctruthmode!=0 : dtag+='_filt'+str(mctruthmode)
-                                
+
             if(xsec>0 and not isdata) :
                 for ibr in br :  xsec = xsec*ibr
             split=getByLabel(d,'split',1)
 
 	    for segment in range(0,split) :
-                if(split==1): 
+                if(split==1):
                     eventsFile=opt.indir + '/' + origdtag + '.root'
                 else:
                     eventsFile=opt.indir + '/' + origdtag + '_' + str(segment) + '.root'
@@ -98,7 +99,7 @@ for proc in procList :
                         if(len(varopt)<2) : continue
                         sedcmd += 's%' + varopt[0] + '%' + varopt[1] + '%;'
             	sedcmd += '\"'
-		if(split==1): 
+		if(split==1):
                     cfgfile=opt.outdir +'/'+ dtag + suffix + '_cfg.py'
 		else:
                     cfgfile=opt.outdir +'/'+ dtag + suffix + '_' + str(segment) + '_cfg.py'
