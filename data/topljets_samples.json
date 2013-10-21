@@ -70,7 +70,6 @@
          "isdata":false,
          "color":"922",
          "lcolor":1,
-         "mctruthmode":2,
          "data":[{ "dtag":"MC8TeV_TTJets_172v5", "xsec":245.8, "split":5 } ]
       },
       {
