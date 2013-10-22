@@ -75,6 +75,91 @@ int applyJetSelection(data::PhysicsObjectCollection_t jets, data::PhysicsObjectC
 	return nbtags;
 }
 
+void applyLeptonSelection(data::PhysicsObjectCollection_t leptons, data::PhysicsObjectCollection_t &selLeptons, data::PhysicsObjectCollection_t &vetoLeptons, data::PhysicsObjectCollection_t &antiIsoLeptons, MuScleFitCorrector *muCor, float rho, bool isMC){
+	for(size_t ilep=0; ilep<leptons.size(); ilep++){
+		Int_t id=leptons[ilep].get("id");
+		bool passKin(true),passId(true),passIso(true);             // variables for lepton selection
+		bool passVetoKin(true),passVetoId(true),passVetoIso(true); // variables for additional lepton veto
+		bool passAntiIso(true);                                    // variables for QCD control region selection
+		if(abs(id)==11) {
+			float sceta=leptons[ilep].getVal("sceta");
+			Float_t gIso    = leptons[ilep].getVal("gIso03");
+			Float_t chIso   = leptons[ilep].getVal("chIso03");
+			//Float_t puchIso = leptons[ilep].getVal("puchIso03");
+			Float_t nhIso   = leptons[ilep].getVal("nhIso03");
+			float relIso=(TMath::Max(nhIso+gIso-rho*utils::cmssw::getEffectiveArea(11,sceta),Float_t(0.))+chIso)/leptons[ilep].pt();
+			// selection of veto electrons
+			if(leptons[ilep].pt()<20)                      passVetoKin=false;
+			if(fabs(leptons[ilep].eta())>2.5)              passVetoKin=false;
+			if(leptons[ilep].getVal("tk_d0")>0.4)          passVetoId =false;  // FIXME: is this the correct value?
+			if(leptons[ilep].getVal("mvatrig")<0.0)        passVetoId =false;
+			if(relIso>0.15)                                passVetoIso=false;
+			// selection of tight electrons
+			if(leptons[ilep].pt()<30)                      passKin=false;
+			if(fabs(leptons[ilep].eta())>2.5)              passKin=false;
+			if(fabs(sceta)>1.4442 && fabs(sceta)<1.5660)   passKin=false;
+			if(leptons[ilep].getFlag("isconv"))            passId =false;
+			if(leptons[ilep].getVal("tk_d0")>0.2)          passId =false;  // FIXME: is this the correct value?
+			if(leptons[ilep].getVal("tk_lostInnerHits")>0) passId =false;
+			if(leptons[ilep].getVal("mvatrig")<0.5)        passId =false;
+			if(relIso>0.1)                                 passIso=false;
+			// selection of the QCD control region
+			if(relIso<0.2)                                 passAntiIso=false;
+
+		}
+		else if (abs(id)==13) {
+			if(muCor) {
+				TLorentzVector p4(leptons[ilep].px(),leptons[ilep].py(),leptons[ilep].pz(),leptons[ilep].energy());
+				muCor->applyPtCorrection(p4 , id<0 ? -1 : 1 );
+				if(isMC) muCor->applyPtSmearing(p4, id<0 ? -1 : 1, false);
+				leptons[ilep].SetPxPyPzE(p4.Px(),p4.Py(),p4.Pz(),p4.E());
+			}
+			Int_t idbits    = leptons[ilep].get("idbits");
+			bool isTight    = ((idbits >> 10) & 0x1);
+			Float_t gIso    = leptons[ilep].getVal("gIso04");
+			Float_t chIso   = leptons[ilep].getVal("chIso04");
+			Float_t puchIso = leptons[ilep].getVal("puchIso04");
+			Float_t nhIso   = leptons[ilep].getVal("nhIso04");
+			Float_t relIso=(TMath::Max(nhIso+gIso-0.5*puchIso,0.)+chIso)/leptons[ilep].pt();
+			// selection of veto muons (same selection as dilepton muon, except the lower pt)
+			if(leptons[ilep].pt()<10)                      passVetoKin=false;
+			if(fabs(leptons[ilep].eta())>2.5)              passVetoKin=false;
+			// if(!isTight)                                   passVetoId=false;
+			if(relIso>0.2)                                 passVetoIso=false;
+			// selection of tight muons
+			if(leptons[ilep].pt()<26)                                passKin=false;
+			if(fabs(leptons[ilep].eta())>2.1)                        passKin=false;
+			// FIXME: add the tight selection variables
+			// if(leptons[ilep].getVal("innerTrackChi2")>10.)           passId=false;  // FIXME: is this the correct variable?
+			// if(leptons[ilep].getVal("trkLayersWithMeasurement")<5.)  passId=false;
+			// if(leptons[ilep].getVal("validMuonHits")<=0)             passId=false;
+			// if(leptons[ilep].getVal("tk_d0")>0.2)                    passId=false;  // FIXME: is this the correct value?
+			// if(leptons[ilep].getVal("tk_dz")>0.5)                    passId=false;  // FIXME: is this the correct value?
+			// if(leptons[ilep].getVal("tk_validPixelHits")<=0)         passId=false;
+			// if(leptons[ilep].getVal("mn_nMatchedStations")<1)        passId=false;
+			if(!isTight)                                             passId=false;
+			if(relIso>0.12)                                          passIso=false;
+			// selection of the QCD control region
+			if(relIso<0.20)                                          passAntiIso=false;
+		}
+
+		// QCD control region lepton selection (i.e. final but inverted iso)
+		if(passKin && passId && passAntiIso)
+			antiIsoLeptons.push_back(leptons[ilep]);
+
+		// Veto lepton selection
+		if((passVetoKin && passVetoId && passVetoIso) && !(passKin && passId && passIso))
+			vetoLeptons.push_back(leptons[ilep]);
+
+		// Final lepton selection
+		if(passKin && passId && passIso)
+			selLeptons.push_back(leptons[ilep]);
+	}
+	sort(selLeptons.begin(),     selLeptons.end(),     data::PhysicsObject_t::sortByPt);
+	sort(vetoLeptons.begin(),    vetoLeptons.end(),    data::PhysicsObject_t::sortByPt);
+	sort(antiIsoLeptons.begin(), antiIsoLeptons.end(), data::PhysicsObject_t::sortByPt);
+}
+
 
 //
 int main(int argc, char* argv[])
@@ -240,6 +325,7 @@ int main(int argc, char* argv[])
 		controlHistos.addHistogram( new TH1F(ctrlCats[k]+"charge",";lepton charge;Events",3,-1.5,1.5) );
 		controlHistos.addHistogram( new TH1F(ctrlCats[k]+"emva", "; e-id MVA; Electrons", 50, 0.95,1.0) );
 		controlHistos.addHistogram( new TH1F(ctrlCats[k]+"met",";Missing transverse energy [GeV];Events",50,0,500) );
+		controlHistos.addHistogram( new TH1F("antiiso_"+ctrlCats[k]+"met",";Missing transverse energy [GeV];Events",50,0,500) );
 		controlHistos.addHistogram( new TH1F(ctrlCats[k]+"iso",";Isolation variable;Events",50,0,1.0) );
 		TH1F *h=(TH1F *)controlHistos.addHistogram( new TH1F(ctrlCats[k]+"njets",";Jet multiplicity;Events",6,0,6) );
 		for(int ibin=1; ibin<=h->GetXaxis()->GetNbins(); ibin++) {
@@ -386,108 +472,30 @@ int main(int argc, char* argv[])
 		if(filterOnlyMU)  { eTrigger=false;  }
 
 
-		//
-		// Lepton selection
-		//
-		data::PhysicsObjectCollection_t leptons=evSummary.getPhysicsObject(DataEventSummaryHandler::LEPTONS);
-		data::PhysicsObjectCollection_t selLeptons;
-		data::PhysicsObjectCollection_t vetoLeptons;
-		data::PhysicsObjectCollection_t antiIsoLeptons;
-		for(size_t ilep=0; ilep<leptons.size(); ilep++){
-			Int_t id=leptons[ilep].get("id");
-			bool passKin(true),passId(true),passIso(true);             // variables for lepton selection
-			bool passVetoKin(true),passVetoId(true),passVetoIso(true); // variables for additional lepton veto
-			bool passAntiIso(true);                                    // variables for QCD control region selection
-			if(abs(id)==11) {
-				float sceta=leptons[ilep].getVal("sceta");
-				Float_t gIso    = leptons[ilep].getVal("gIso03");
-				Float_t chIso   = leptons[ilep].getVal("chIso03");
-				//Float_t puchIso = leptons[ilep].getVal("puchIso03");
-				Float_t nhIso   = leptons[ilep].getVal("nhIso03");
-				float relIso=(TMath::Max(nhIso+gIso-ev.rho*utils::cmssw::getEffectiveArea(11,sceta),Float_t(0.))+chIso)/leptons[ilep].pt();
-				// selection of veto electrons
-				if(leptons[ilep].pt()<20)                      passVetoKin=false;
-				if(fabs(leptons[ilep].eta())>2.5)              passVetoKin=false;
-				if(leptons[ilep].getVal("tk_d0")>0.4)          passVetoId =false;  // FIXME: is this the correct value?
-				if(leptons[ilep].getVal("mvatrig")<0.0)        passVetoId =false;
-				if(relIso>0.15)                                passVetoIso=false;
-				// selection of tight electrons
-				if(leptons[ilep].pt()<30)                      passKin=false;
-				if(fabs(leptons[ilep].eta())>2.5)              passKin=false;
-				if(fabs(sceta)>1.4442 && fabs(sceta)<1.5660)   passKin=false;
-				if(leptons[ilep].getFlag("isconv"))            passId =false;
-				if(leptons[ilep].getVal("tk_d0")>0.2)          passId =false;  // FIXME: is this the correct value?
-				if(leptons[ilep].getVal("tk_lostInnerHits")>0) passId =false;
-				if(leptons[ilep].getVal("mvatrig")<0.5)        passId =false;
-				if(relIso>0.1)                                 passIso=false;
-				// selection of the QCD control region
-				if(relIso<0.2)                                 passAntiIso=false;
-
-			}
-			else if (abs(id)==13) {
-				if(muCor) {
-					TLorentzVector p4(leptons[ilep].px(),leptons[ilep].py(),leptons[ilep].pz(),leptons[ilep].energy());
-					muCor->applyPtCorrection(p4 , id<0 ? -1 : 1 );
-					if(isMC) muCor->applyPtSmearing(p4, id<0 ? -1 : 1, false);
-					leptons[ilep].SetPxPyPzE(p4.Px(),p4.Py(),p4.Pz(),p4.E());
-				}
-				Int_t idbits    = leptons[ilep].get("idbits");
-				bool isTight    = ((idbits >> 10) & 0x1);
-				Float_t gIso    = leptons[ilep].getVal("gIso04");
-				Float_t chIso   = leptons[ilep].getVal("chIso04");
-				Float_t puchIso = leptons[ilep].getVal("puchIso04");
-				Float_t nhIso   = leptons[ilep].getVal("nhIso04");
-				Float_t relIso=(TMath::Max(nhIso+gIso-0.5*puchIso,0.)+chIso)/leptons[ilep].pt();
-				// selection of veto muons (same selection as dilepton muon, except the lower pt)
-				if(leptons[ilep].pt()<10)                      passVetoKin=false;
-				if(fabs(leptons[ilep].eta())>2.5)              passVetoKin=false;
-				// if(!isTight)                                   passVetoId=false;
-				if(relIso>0.2)                                 passVetoIso=false;
-				// selection of tight muons
-				if(leptons[ilep].pt()<26)                                passKin=false;
-				if(fabs(leptons[ilep].eta())>2.1)                        passKin=false;
-				// FIXME: add the tight selection variables
-				// if(leptons[ilep].getVal("innerTrackChi2")>10.)           passId=false;  // FIXME: is this the correct variable?
-				// if(leptons[ilep].getVal("trkLayersWithMeasurement")<5.)  passId=false;
-				// if(leptons[ilep].getVal("validMuonHits")<=0)             passId=false;
-				// if(leptons[ilep].getVal("tk_d0")>0.2)                    passId=false;  // FIXME: is this the correct value?
-				// if(leptons[ilep].getVal("tk_dz")>0.5)                    passId=false;  // FIXME: is this the correct value?
-				// if(leptons[ilep].getVal("tk_validPixelHits")<=0)         passId=false;
-				// if(leptons[ilep].getVal("mn_nMatchedStations")<1)        passId=false;
-				if(!isTight)                                             passId=false;
-				if(relIso>0.12)                                          passIso=false;
-				// selection of the QCD control region
-				if(relIso<0.20)                                          passAntiIso=false;
-			}
-
-			// QCD control region lepton selection (i.e. final but inverted iso)
-			if(passKin && passId && passAntiIso) antiIsoLeptons.push_back(leptons[ilep]);
-
-			// Veto lepton selection
-			if((passVetoKin && passVetoId && passVetoIso) && !(passKin && passId && passIso)) vetoLeptons.push_back(leptons[ilep]);
-
-			// Final lepton selection
-			if(passKin && passId && passIso) selLeptons.push_back(leptons[ilep]);
-		}
-		sort(selLeptons.begin(),     selLeptons.end(),     data::PhysicsObject_t::sortByPt);
-		sort(vetoLeptons.begin(),    vetoLeptons.end(),    data::PhysicsObject_t::sortByPt);
-		sort(antiIsoLeptons.begin(), antiIsoLeptons.end(), data::PhysicsObject_t::sortByPt);
-
+		/////////////////////////////////////////
+		// Lepton selection /////////////////////
+		/////////////////////////////////////////
+		data::PhysicsObjectCollection_t selLeptons, vetoLeptons, antiIsoLeptons;
+		applyLeptonSelection(evSummary.getPhysicsObject(DataEventSummaryHandler::LEPTONS), selLeptons, vetoLeptons, antiIsoLeptons, muCor, ev.rho, isMC);
 
 		// Trigger selection
 		if(!eTrigger && !muTrigger) continue;
 
 
-		// At least one selected lepton
-		if(selLeptons.size()<1) continue;
+		// At least one selected lepton or one anti Isolation lepton
+		if(selLeptons.size() < 1 && antiIsoLeptons.size() < 1) continue;
 
 
 		// Determine the lepton+jets channel
-		ev.cat=1;
+		data::PhysicsObject_t firstLepton;
+		if (selLeptons.size() > 0) firstLepton = selLeptons[0];
+		else                       firstLepton = antiIsoLeptons[0];
+
+		ev.cat = 1;
 		float lScaleFactor(1.0);
-		ev.cat *= selLeptons[0].get("id");
-		int id(abs(selLeptons[0].get("id")));
-		lScaleFactor = isMC ? lepEff.getLeptonEfficiency( selLeptons[0].pt(), selLeptons[0].eta(), id,  id ==11 ? "loose" : "tight" ).first : 1.0; // FIXME: check!
+		ev.cat *= firstLepton.get("id");
+		int id(abs(firstLepton.get("id")));
+		lScaleFactor = isMC ? lepEff.getLeptonEfficiency( firstLepton.pt(), firstLepton.eta(), id,  id ==11 ? "loose" : "tight" ).first : 1.0; // FIXME: check!
 
 		TString chName;
 		if     (abs(ev.cat)==11 && eTrigger)   { chName="e";  }
@@ -519,48 +527,51 @@ int main(int argc, char* argv[])
 		if(isSameFlavor) ch.push_back("ll");
 		*/
 
-		//apply data/mc correction factors and update the event weight
+		// Apply data/mc correction factors and update the event weight
 		float weight = weightNom*lScaleFactor;
 
-		//jet/met
+		// Jet/MET
 		data::PhysicsObjectCollection_t recoMet = evSummary.getPhysicsObject(DataEventSummaryHandler::MET);
 		data::PhysicsObjectCollection_t jets    = evSummary.getPhysicsObject(DataEventSummaryHandler::JETS);
 		utils::cmssw::updateJEC(jets,jesCor,totalJESUnc,ev.rho,ev.nvtx,isMC);
 		std::vector<LorentzVector> missingEt = utils::cmssw::getMETvariations(recoMet[0],jets,selLeptons,isMC);
 
-		//
-		// Jet selection
-		//
+		/////////////////////////////////////////
+		// Jet selection ////////////////////////
+		/////////////////////////////////////////
 		data::PhysicsObjectCollection_t looseJets, selJets;
 		int nbtags = applyJetSelection(jets, selLeptons, vetoLeptons, looseJets, selJets);
 
-		//
-		// EVENT SELECTION
-		//
-		if(selLeptons.size()<1) continue; // Redundant??
+		/////////////////////////////////////////
+		// EVENT SELECTION //////////////////////
+		/////////////////////////////////////////
 		controlHistos.fillHisto("evtflow",    ch, 0, weight);
 		controlHistos.fillHisto("lxyevtflow", ch, 0, weight);
 		controlHistos.fillHisto("ueevtflow",  ch, 0, weight);
 		controlHistos.fillHisto("nvertices",  ch, ev.nvtx, weight);
 
-		bool passSoftLeptonVeto(vetoLeptons.size()==0 && selLeptons.size()==1 ); // exactly one selected and zero vetoed leptons
-		bool pass3JetSelection (selJets.size()>=3 );                             // three or more selected jets
-		bool passJetSelection  (selJets.size()>=4 );                             // four or more selected jets
-		bool pass1BtagSelection(nbtags>=1 );                                     // one or more b-tagged jets
-		bool passBtagSelection (nbtags>=2 );                                     // two or more b-tagged jets
-		bool passBtagVeto      (nbtags==0 );                                     // no b-tagged jets
+		bool passSoftLeptonVeto  (vetoLeptons.size()==0 && selLeptons.size()==1 );                             // exactly one selected and zero vetoed leptons
+		bool passAntiIsoLeptonSel(selLeptons.size()==0 && vetoLeptons.size()==0 && antiIsoLeptons.size()==1 ); // exactly one anti iso lepton and nothing else
+		bool pass3JetSelection   (selJets.size()>=3 );                                                         // three or more selected jets
+		bool passJetSelection    (selJets.size()>=4 );                                                         // four or more selected jets
+		bool pass1BtagSelection  (nbtags>=1 );                                                                 // one or more b-tagged jets
+		bool passBtagSelection   (nbtags>=2 );                                                                 // two or more b-tagged jets
+		bool passBtagVeto        (nbtags==0 );                                                                 // no b-tagged jets
 
-		//
-		// NOMINAL SELECTION CONTROL
-		//
-		std::vector<TString> ctrlCategs;
-		float wjetsWeight(1.0),qcdWeight(1.0),ibtagdyWeight(1.0);
-		if(passSoftLeptonVeto)                                             { ctrlCategs.push_back("presel_");         if(wjetsSFmap.find(chName+"_presel")!=wjetsSFmap.end())       wjetsWeight=wjetsSFmap[chName+"_presel"];}
-		if(passSoftLeptonVeto && selJets.size()==1 )                       { ctrlCategs.push_back("eq1jet_");         if(wjetsSFmap.find(chName+"_eq1jet")!=wjetsSFmap.end())       wjetsWeight=wjetsSFmap[chName+"_eq1jet"];}
-		if(passSoftLeptonVeto && pass3JetSelection && pass1BtagSelection)  { ctrlCategs.push_back("geq3jet1btag_");   if(wjetsSFmap.find(chName+"_geq3jet1btag")!=wjetsSFmap.end()) wjetsWeight=wjetsSFmap[chName+"_geq3jet1btag"];}
-		if(passSoftLeptonVeto && passJetSelection )                        { ctrlCategs.push_back("geq4jet_");        if(wjetsSFmap.find(chName+"_geq4jet")!=wjetsSFmap.end())      wjetsWeight=wjetsSFmap[chName+"_geq4jet"];}
-		if(passSoftLeptonVeto && passJetSelection  && passBtagSelection)   { ctrlCategs.push_back("btag_");           if(wjetsSFmap.find(chName+"_btag")!=wjetsSFmap.end())         wjetsWeight=wjetsSFmap[chName+"_btag"];}
-		if(passSoftLeptonVeto && passJetSelection  && passBtagVeto)        { ctrlCategs.push_back("bveto_");          if(wjetsSFmap.find(chName+"_bveto")!=wjetsSFmap.end())        wjetsWeight=wjetsSFmap[chName+"_bveto"];}
+		std::vector<TString> ctrlCategs, antiIsoCtrlCategs;
+		float wjetsWeight(1.0), qcdWeight(1.0), ibtagdyWeight(1.0);
+		if(passSoftLeptonVeto)                                               ctrlCategs.push_back("presel_");
+		if(passSoftLeptonVeto   && selJets.size()==1 )                       ctrlCategs.push_back("eq1jet_");
+		if(passSoftLeptonVeto   && pass3JetSelection && pass1BtagSelection)  ctrlCategs.push_back("geq3jet1btag_");
+		if(passSoftLeptonVeto   && passJetSelection )                        ctrlCategs.push_back("geq4jet_");
+		if(passSoftLeptonVeto   && passJetSelection  && passBtagSelection)   ctrlCategs.push_back("btag_");
+		if(passSoftLeptonVeto   && passJetSelection  && passBtagVeto)        ctrlCategs.push_back("bveto_");
+		if(passAntiIsoLeptonSel)                                             antiIsoCtrlCategs.push_back("antiiso_presel_");
+		if(passAntiIsoLeptonSel && selJets.size()==1 )                       antiIsoCtrlCategs.push_back("antiiso_eq1jet_");
+		if(passAntiIsoLeptonSel && pass3JetSelection && pass1BtagSelection)  antiIsoCtrlCategs.push_back("antiiso_geq3jet1btag_");
+		if(passAntiIsoLeptonSel && passJetSelection )                        antiIsoCtrlCategs.push_back("antiiso_geq4jet_");
+		if(passAntiIsoLeptonSel && passJetSelection  && passBtagSelection)   antiIsoCtrlCategs.push_back("antiiso_btag_");
+		if(passAntiIsoLeptonSel && passJetSelection  && passBtagVeto)        antiIsoCtrlCategs.push_back("antiiso_bveto_");
 
 		////////////////////////////////////////////////////////////////////////////
 		// SELECTION REGIONS
@@ -573,6 +584,24 @@ int main(int argc, char* argv[])
 		// bveto_         : presel + four or more jets, no b-tags
 		//
 		////////////////////////////////////////////////////////////////////////////
+
+		// Get wjets scale factor
+		for(size_t icat=0; icat<ctrlCategs.size(); icat++){
+			TString keyname(chName+"_"+ctrlCategs[icat].Copy().Chop());
+			if(wjetsSFmap.find(keyname) != wjetsSFmap.end()){
+				wjetsWeight = wjetsSFmap[keyname];
+			}
+		}
+
+		// Fill MET distribution from QCD control region
+		for(size_t icat = 0; icat < antiIsoCtrlCategs.size(); icat++){
+			float iweight(weight);
+			iweight *= wjetsWeight;
+			controlHistos.fillHisto(antiIsoCtrlCategs[icat]+"met", ch, missingEt[0].pt(), iweight);
+		}
+
+		// From here on, don't need QCD control region:
+		if(selLeptons.size() < 1) continue;
 
 		// fill different control distributions
 		float charge = 0;
