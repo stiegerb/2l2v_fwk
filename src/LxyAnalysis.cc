@@ -8,7 +8,7 @@ typedef ROOT::Math::LorentzVector<ROOT::Math::PxPyPzE4D<double> >::BetaVector Be
 LxyAnalysis::LxyAnalysis(SmartSelectionMonitor &mon,bool runSystematics) : mon_(&mon){
 	// Start monitoring histograms of this analysis
 	TH1 *h = mon_->addHistogram( new TH2F ("bjetlxybhad",    "; L_{xy}(reco) [cm]; B-hadron; Jets", 50,0,5, 4,0,4) );
-	h->GetYaxis()->SetBinLabel(1,"B^{0}");  h->GetXaxis()->SetBinLabel(2,"B^{+}");  h->GetXaxis()->SetBinLabel(3,"B^{0}_{s}");  h->GetXaxis()->SetBinLabel(5,"Others or B^{+}_{c}");
+	h->GetYaxis()->SetBinLabel(1,"B^{0}");  h->GetYaxis()->SetBinLabel(2,"B^{+}");  h->GetYaxis()->SetBinLabel(3,"B^{0}_{s}");  h->GetYaxis()->SetBinLabel(4,"Others or B^{+}_{c}");
 	h = mon_->addHistogram( new TH1F ("lxybhad", "; B-hadron; Jets", 5,0,5) );
 	h->GetXaxis()->SetBinLabel(1,"B^{0}");  h->GetXaxis()->SetBinLabel(2,"B^{+}");  h->GetXaxis()->SetBinLabel(3,"B^{0}_{s}");  h->GetXaxis()->SetBinLabel(4,"B^{+}_{c}");  h->GetXaxis()->SetBinLabel(5,"Others");
 	for(size_t i=0; i<4; i++){
