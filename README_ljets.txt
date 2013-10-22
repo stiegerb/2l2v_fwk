@@ -2,7 +2,7 @@
 ## Instructions to run the l+jets analysis:
 
 ## Create the raw histograms:
-runLocalAnalysisOverSamples.py -e runTopAnalysis -j data/topljets_samples.json -d /store/cmst3/user/psilva/5311_ntuples -o ~/work/TopAnalysis/top_5311/raw/  -c test/runAnalysis_cfg.py.templ -p "@runSystematics=True @saveSummaryTree=False  -s 8nh
+runLocalAnalysisOverSamples.py -e runTopAnalysis -j data/topljets_samples.json -d /store/cmst3/user/psilva/5311_ntuples -o ~/work/TopAnalysis/top_5311/raw/  -c test/runAnalysis_cfg.py.templ -p "@runSystematics=True @saveSummaryTree=False"  -s 8nh
 
 ## Also for the additional mass points and the systematic samples:
 runLocalAnalysisOverSamples.py -e runTopAnalysis -j data/topljets_syst_samples.json  -d /store/cmst3/user/psilva/5311_ntuples -o ~/work/TopAnalysis/top_5311/raw/  -c test/runAnalysis_cfg.py.templ -p "@runSystematics=True @saveSummaryTree=False"  -s 8nh
@@ -19,11 +19,11 @@ runPlotter --iLumi 19683 --inDir ~/work/TopAnalysis/top_5311/raw/ --json data/to
 ./scripts/getWJetsNormalization.py -b -i ~/work/TopAnalysis/top_5311/plotter_wjets_raw.root
 
 ## Re-run the W+jets MC samples and apply the background scale factors:
-runLocalAnalysisOverSamples.py -e runTopAnalysis -j data/topljets_samples.json  -d /store/cmst3/user/psilva/5311_ntuples -o ~/work/TopAnalysis/top_5311/raw/  -c test/runAnalysis_cfg.py.templ -p "@runSystematics=True @saveSummaryTree=False @weightsFile='data/weights/top_wjetssf.root'" -s 8nh -t WJets
-runLocalAnalysisOverSamples.py -e runTopAnalysis -j data/topljets_samples.json  -d /store/cmst3/user/psilva/5311_ntuples -o ~/work/TopAnalysis/top_5311/raw/  -c test/runAnalysis_cfg.py.templ -p "@runSystematics=True @saveSummaryTree=False @weightsFile='data/weights/top_wjetssf.root'" -s 8nh -t W1Jets
-runLocalAnalysisOverSamples.py -e runTopAnalysis -j data/topljets_samples.json  -d /store/cmst3/user/psilva/5311_ntuples -o ~/work/TopAnalysis/top_5311/raw/  -c test/runAnalysis_cfg.py.templ -p "@runSystematics=True @saveSummaryTree=False @weightsFile='data/weights/top_wjetssf.root'" -s 8nh -t W2Jets
-runLocalAnalysisOverSamples.py -e runTopAnalysis -j data/topljets_samples.json  -d /store/cmst3/user/psilva/5311_ntuples -o ~/work/TopAnalysis/top_5311/raw/  -c test/runAnalysis_cfg.py.templ -p "@runSystematics=True @saveSummaryTree=False @weightsFile='data/weights/top_wjetssf.root'" -s 8nh -t W3Jets
-runLocalAnalysisOverSamples.py -e runTopAnalysis -j data/topljets_samples.json  -d /store/cmst3/user/psilva/5311_ntuples -o ~/work/TopAnalysis/top_5311/raw/  -c test/runAnalysis_cfg.py.templ -p "@runSystematics=True @saveSummaryTree=False @weightsFile='data/weights/top_wjetssf.root'" -s 8nh -t W4Jets
+runLocalAnalysisOverSamples.py -e runTopAnalysis -j data/topljets_samples.json  -d /store/cmst3/user/psilva/5311_ntuples -o ~/work/TopAnalysis/top_5311/wjets_scaled/ -c test/runAnalysis_cfg.py.templ -p "@runSystematics=True @saveSummaryTree=False @weightsFile='data/weights/top_wjetssf.root'" -s 8nh -t _WJets
+runLocalAnalysisOverSamples.py -e runTopAnalysis -j data/topljets_samples.json  -d /store/cmst3/user/psilva/5311_ntuples -o ~/work/TopAnalysis/top_5311/wjets_scaled/ -c test/runAnalysis_cfg.py.templ -p "@runSystematics=True @saveSummaryTree=False @weightsFile='data/weights/top_wjetssf.root'" -s 8nh -t W1Jets
+runLocalAnalysisOverSamples.py -e runTopAnalysis -j data/topljets_samples.json  -d /store/cmst3/user/psilva/5311_ntuples -o ~/work/TopAnalysis/top_5311/wjets_scaled/ -c test/runAnalysis_cfg.py.templ -p "@runSystematics=True @saveSummaryTree=False @weightsFile='data/weights/top_wjetssf.root'" -s 8nh -t W2Jets
+runLocalAnalysisOverSamples.py -e runTopAnalysis -j data/topljets_samples.json  -d /store/cmst3/user/psilva/5311_ntuples -o ~/work/TopAnalysis/top_5311/wjets_scaled/ -c test/runAnalysis_cfg.py.templ -p "@runSystematics=True @saveSummaryTree=False @weightsFile='data/weights/top_wjetssf.root'" -s 8nh -t W3Jets
+runLocalAnalysisOverSamples.py -e runTopAnalysis -j data/topljets_samples.json  -d /store/cmst3/user/psilva/5311_ntuples -o ~/work/TopAnalysis/top_5311/wjets_scaled/ -c test/runAnalysis_cfg.py.templ -p "@runSystematics=True @saveSummaryTree=False @weightsFile='data/weights/top_wjetssf.root'" -s 8nh -t W4Jets
 
 ## Run the QCD background estimates:
 ./scripts/getQCDNormalization.py -b -i ~/work/TopAnalysis/top_5311/plotter_wjets_scaled.root
