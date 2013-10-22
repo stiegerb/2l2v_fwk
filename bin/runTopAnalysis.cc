@@ -45,6 +45,37 @@
 
 using namespace std;
 
+int applyJetSelection(data::PhysicsObjectCollection_t jets, data::PhysicsObjectCollection_t selLeptons, data::PhysicsObjectCollection_t vetoLeptons, data::PhysicsObjectCollection_t &looseJets, data::PhysicsObjectCollection_t &selJets){
+	int nbtags(0);
+	for(size_t ijet=0; ijet<jets.size(); ijet++){
+		//cross-clean with selected leptons
+		double minDRlj(9999.);
+		for(size_t ilep=0; ilep<selLeptons.size(); ilep++)
+			minDRlj = TMath::Min( minDRlj, deltaR(jets[ijet],selLeptons[ilep]) );
+		if(minDRlj<0.4) continue;
+
+		//cross-clean with vetoed leptons //FIXME: should not matter as we anyway veto events with additional leptons...
+		minDRlj = 9999.;
+		for(size_t ilep=0; ilep<vetoLeptons.size(); ilep++) minDRlj = TMath::Min( minDRlj, deltaR(jets[ijet],vetoLeptons[ilep]) );
+		if(minDRlj<0.4) continue;
+
+		//require to pass the loose id
+		Int_t idbits=jets[ijet].get("idbits");
+		bool passPFloose( ((idbits>>0) & 0x1));
+		if(!passPFloose) continue;
+
+		//top candidate jets
+		looseJets.push_back(jets[ijet]);
+		if(jets[ijet].pt()<30 || fabs(jets[ijet].eta())>2.5 ) continue;
+		selJets.push_back(jets[ijet]);
+		nbtags += (jets[ijet].getVal("csv")>0.405);
+	}
+	sort(looseJets.begin(),looseJets.end(),data::PhysicsObject_t::sortByCSV);
+	sort(selJets.begin(),  selJets.end(),  data::PhysicsObject_t::sortByCSV);
+	return nbtags;
+}
+
+
 //
 int main(int argc, char* argv[])
 {
@@ -339,7 +370,7 @@ int main(int argc, char* argv[])
 			}
 
 			if(mcTruthMode==1 && (ngenLeptonsStatus3!=1 || !hasTop)) continue; // mcTruthMode 1 will select events with exactly 1 status 3 lepton and a top
-			if(mcTruthMode==2 && (ngenLeptonsStatus3==0 || !hasTop)) continue; // mcTruthMode 2 will select events with exactly 0 status 3 lepton and a top
+			if(mcTruthMode==2 && (ngenLeptonsStatus3==0 || !hasTop)) continue; // mcTruthMode 2 will select events with at least 1 status 3 lepton and a top
 		}
 
 		Hcutflow->Fill(1,1);
@@ -390,7 +421,7 @@ int main(int argc, char* argv[])
 				if(leptons[ilep].getVal("mvatrig")<0.5)        passId =false;
 				if(relIso>0.1)                                 passIso=false;
 				// selection of the QCD control region
-				if(relIso<0.20)                                passAntiIso=false;
+				if(relIso<0.2)                                 passAntiIso=false;
 
 			}
 			else if (abs(id)==13) {
@@ -429,20 +460,18 @@ int main(int argc, char* argv[])
 				if(relIso<0.20)                                          passAntiIso=false;
 			}
 
-			// if(!passVetoKin || !passVetoId || !(passVetoIso || passAntiIso)) continue;
-			if(!passVetoKin || !passVetoId || !passVetoIso) continue;
+			// QCD control region lepton selection (i.e. final but inverted iso)
+			if(passKin && passId && passAntiIso) antiIsoLeptons.push_back(leptons[ilep]);
 
-			// veto leptons
-			if((passVetoKin && passVetoId && passVetoIso) && !(passKin && passId && passIso)) {
-				vetoLeptons.push_back(leptons[ilep]);
-			}
+			// Veto lepton selection
+			if((passVetoKin && passVetoId && passVetoIso) && !(passKin && passId && passIso)) vetoLeptons.push_back(leptons[ilep]);
 
-			// if(!passKin || !passId || !(passIso || passAntiIso)) continue;
-			if(!passKin || !passId || !passIso) continue;
-			selLeptons.push_back(leptons[ilep]);
+			// Final lepton selection
+			if(passKin && passId && passIso) selLeptons.push_back(leptons[ilep]);
 		}
-		sort(selLeptons.begin(),selLeptons.end(),data::PhysicsObject_t::sortByPt);
-		sort(vetoLeptons.begin(),vetoLeptons.end(),data::PhysicsObject_t::sortByPt);
+		sort(selLeptons.begin(),     selLeptons.end(),     data::PhysicsObject_t::sortByPt);
+		sort(vetoLeptons.begin(),    vetoLeptons.end(),    data::PhysicsObject_t::sortByPt);
+		sort(antiIsoLeptons.begin(), antiIsoLeptons.end(), data::PhysicsObject_t::sortByPt);
 
 
 		// Trigger selection
@@ -503,33 +532,7 @@ int main(int argc, char* argv[])
 		// Jet selection
 		//
 		data::PhysicsObjectCollection_t looseJets, selJets;
-		int nbtags(0);
-		for(size_t ijet=0; ijet<jets.size(); ijet++){
-			//cross-clean with selected leptons
-			double minDRlj(9999.);
-			for(size_t ilep=0; ilep<selLeptons.size(); ilep++)
-				minDRlj = TMath::Min( minDRlj, deltaR(jets[ijet],selLeptons[ilep]) );
-			if(minDRlj<0.4) continue;
-
-			//cross-clean with vetoed leptons //FIXME: should not matter as we anyway veto events with additional leptons...
-			minDRlj = 9999.;
-			for(size_t ilep=0; ilep<vetoLeptons.size(); ilep++) minDRlj = TMath::Min( minDRlj, deltaR(jets[ijet],vetoLeptons[ilep]) );
-			if(minDRlj<0.4) continue;
-
-			//require to pass the loose id
-			Int_t idbits=jets[ijet].get("idbits");
-			bool passPFloose( ((idbits>>0) & 0x1));
-			if(!passPFloose) continue;
-
-			//top candidate jets
-			looseJets.push_back(jets[ijet]);
-			if(jets[ijet].pt()<30 || fabs(jets[ijet].eta())>2.5 ) continue;
-			selJets.push_back(jets[ijet]);
-			nbtags += (jets[ijet].getVal("csv")>0.405);
-		}
-		sort(looseJets.begin(),looseJets.end(),data::PhysicsObject_t::sortByCSV);
-		sort(selJets.begin(),  selJets.end(),  data::PhysicsObject_t::sortByCSV);
-
+		int nbtags = applyJetSelection(jets, selLeptons, vetoLeptons, looseJets, selJets);
 
 		//
 		// EVENT SELECTION
