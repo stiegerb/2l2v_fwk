@@ -21,15 +21,30 @@ chandict = {'e':'e',
 qcd_color = 2
 mc_color = 3
 
+def createDir(directory):
+    from os import mkdir
+    try:
+        mkdir(directory)
+    except OSError as exc:
+        import errno, os.path
+        if exc.errno == errno.EEXIST and os.path.isdir(directory):
+            pass
+        else: raise exc
 
-def getNormalization(i_file,chan,level):
+    if not directory.endswith('/'): directory+='/'
+    return directory
 
-    postfix = chan+'_'+level
+def getNormalization(i_file,chan,level,outputdir=''):
+
+    postfix     = chan+'_'+level
+    postfix_qcd = chan+'_antiiso_'+level
 
     # data  = mRF.getHist(i_file, chan+'/'+chan+'_'+level+'_data_0')
     data  = mRF.getHist(i_file,'data/'+postfix)
     data.SetMarkerStyle(20)
     data.GetXaxis().SetTitle('#slashed{E}_{T} [GeV]')
+
+    qcd_shape_hist = mRF.getHist(i_file,'data/'+postfix_qcd) ## take the qcd templates from antiiso data
 
     # qcd   = mRF.getHist(i_file, chan+'/'+chan+'_'+level+'_qcd_0')
     qcd   = mRF.getHist(i_file,'QCD/'+postfix)
@@ -38,14 +53,15 @@ def getNormalization(i_file,chan,level):
     qcd.SetLineStyle(qcd_color)
     qcd.GetXaxis().SetTitle('#slashed{E}_{T} [GeV]')
     # wjets = mRF.getHist(i_file, chan+'/'+chan+'_'+level+'_wjets_0').Clone()
-    wjets = mRF.getHist(i_file,'W+jets/'+postfix).Clone()
     # ttbar = mRF.getHist(i_file, chan+'/'+chan+'_'+level+'_ttbar_1725').Clone()
-    ttbar = mRF.getHist(i_file,'t#bar{t}172.5/'+postfix).Clone()
     # zjets = mRF.getHist(i_file, chan+'/'+chan+'_'+level+'_zjets_0').Clone()
-    zjets = mRF.getHist(i_file,'Z#rightarrow ll/'+postfix).Clone()
     # stop  = mRF.getHist(i_file, chan+'/'+chan+'_'+level+'_singletop_0').Clone()
+    wjets = mRF.getHist(i_file,'W+jets/'+postfix).Clone()
+    ttbar = mRF.getHist(i_file,'t#bar{t}172.5/'+postfix).Clone()
+    zjets = mRF.getHist(i_file,'Z#rightarrow ll/'+postfix).Clone()
     stop  = mRF.getHist(i_file,'Single top/'+postfix).Clone()
-    vv  = mRF.getHist(i_file,'VV/'+postfix).Clone()
+    vv    = mRF.getHist(i_file,'VV/'+postfix).Clone()
+
     mc = wjets.Clone('mc')
     mc.SetLineWidth(2)
     mc.SetLineColor(mc_color)
@@ -68,14 +84,14 @@ def getNormalization(i_file,chan,level):
     print 'data      : %9.0f' % data.Integral()
     print '-'*25
 
-    frac_start = qcd.Integral(0,qcd.GetNbinsX()+1)/(mc.Integral(0,mc.GetNbinsX()+1)+qcd.Integral(0,qcd.GetNbinsX()+1))
+    frac_start = qcd.Integral(0, qcd.GetNbinsX()+1) / ( mc.Integral(0, mc.GetNbinsX()+1) + qcd.Integral(0, qcd.GetNbinsX()+1) )
     start = 0.2
 
     frac = RooRealVar('frac','frac',start,0.0,1.)
     met  = RooRealVar('met','met',0.,300.)
-    data_shape = RooDataHist('data','data',RooArgList(met),data)
-    mc_shape   = RooDataHist('mc_shape','mc_shape',RooArgList(met),mc)
-    qcd_shape  = RooDataHist('qcd_shape','qcd_shape',RooArgList(met),qcd)
+    data_shape = RooDataHist('data','data',          RooArgList(met),data)
+    mc_shape   = RooDataHist('mc_shape','mc_shape',  RooArgList(met),mc)
+    qcd_shape  = RooDataHist('qcd_shape','qcd_shape',RooArgList(met),qcd_shape_hist)
 
     mc_pdf  = RooHistPdf('mc_pdf' ,'mc_pdf' ,RooArgSet(met),mc_shape)
     qcd_pdf = RooHistPdf('qcd_pdf','qcd_pdf',RooArgSet(met),qcd_shape)
@@ -118,9 +134,13 @@ def getNormalization(i_file,chan,level):
     pave.Draw()
 
 
+    outdir = ''
+    if len(outputdir)>0:
+        outdir = createDir(outputdir)
 
     c.Update()
-    c.Print('qcd_'+chan+'_'+level+'.png')
+    c.Print(outdir+'qcd_'+chan+'_'+level+'.png')
+    c.Print(outdir+'qcd_'+chan+'_'+level+'.pdf')
     # c.Print('qcd_'+chan+'_'+level+'.eps')
     # c.Print('qcd_'+chan+'_'+level+'.C')
 
@@ -128,23 +148,20 @@ def getNormalization(i_file,chan,level):
 
 
 def main():
-
     usage = 'usage: %prog [options]'
     parser = optparse.OptionParser(usage)
-    parser.add_option('-i', '--inputfile'    ,    dest='inputfile'         , help='Name of the input file containing the histograms.'             , default=None)
-    parser.add_option('-b', '--batch'        ,    dest='batch'             , help='Use this flag to run root in batch mode.'            , action='store_true'        , default=False)
-    # parser.add_option('-q', '--qcdtemplates' ,    dest='qcdtemplates'      , help='Name of the input file containing the QCD templates.'          , default=None)
-    # parser.add_option('-o', '--outputdir' ,    dest='outputdir'      , help='Name of the local output directory.'                        , default='plotHistograms_out')
-
-
+    parser.add_option('-i', '--inputfile',    dest='inputfile'   , help='Name of the input file containing the histograms.'             , default=None)
+    parser.add_option('-b', '--batch',        dest='batch'       , help='Use this flag to run root in batch mode.', action='store_true' , default=False)
+    parser.add_option('-q', '--qcdtemplates', dest='qcdtemplates', help='Name of the input file containing the QCD templates.'          , default=None)
+    parser.add_option('-o', '--outputdir',    dest='outputdir'   , help='Name of the local output directory.'                           , default='QCDNormalization')
     (opt, args) = parser.parse_args()
 
+    ## Handle input parameters:
     if opt.inputfile is None:
         parser.error('No input file defined!')
     inputfile = opt.inputfile
-    batch = opt.batch
 
-    if batch:
+    if opt.batch:
         sys.argv.append( '-b' )
         ROOT.gROOT.SetBatch()
 
@@ -161,7 +178,7 @@ def main():
     for chan in channels:
         # levels = [k.split('_')[1] for k in mRF.GetKeyNames(i_file,chan) if ('met' in k and not 'flow' in k)]
             for level in list(set(levels)):
-                sf = getNormalization(i_file,chan,level)
+                sf = getNormalization(i_file,chan,level,outputdir=opt.outputdir)
                 sfs[chan+'_'+level] = sf
 
 
