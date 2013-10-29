@@ -82,7 +82,7 @@ void LxyAnalysis::analyze(data::PhysicsObjectCollection_t & leptons, data::Physi
 			leadingSecVtxMass = svx.M();
 		}
 	}
-	if(leadingLxy<0) return; // Select events with at least one Lxy found
+	if(leadingLxy < 0) return; // Select events with at least one Lxy found
 	bool passFiducialCut(fabs(lxyJet->eta())<1.1);
 
 	// MC truth

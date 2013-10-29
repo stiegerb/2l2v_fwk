@@ -70,8 +70,8 @@ int applyJetSelection(data::PhysicsObjectCollection_t jets, data::PhysicsObjectC
 		selJets.push_back(jets[ijet]);
 		nbtags += (jets[ijet].getVal("csv")>0.405); // loose
 	}
-	sort(looseJets.begin(), looseJets.end(), data::PhysicsObject_t::sortByCSV);
-	sort(selJets.begin(),   selJets.end(),   data::PhysicsObject_t::sortByCSV);
+	sort(looseJets.begin(), looseJets.end(), data::PhysicsObject_t::sortByPt);
+	sort(selJets.begin(),   selJets.end(),   data::PhysicsObject_t::sortByPt);
 	return nbtags;
 }
 
