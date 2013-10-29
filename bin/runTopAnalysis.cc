@@ -48,30 +48,30 @@ using namespace std;
 int applyJetSelection(data::PhysicsObjectCollection_t jets, data::PhysicsObjectCollection_t selLeptons, data::PhysicsObjectCollection_t vetoLeptons, data::PhysicsObjectCollection_t &looseJets, data::PhysicsObjectCollection_t &selJets){
 	int nbtags(0);
 	for(size_t ijet=0; ijet<jets.size(); ijet++){
-		//cross-clean with selected leptons
+		// Cross-clean with selected leptons
 		double minDRlj(9999.);
 		for(size_t ilep=0; ilep<selLeptons.size(); ilep++)
 			minDRlj = TMath::Min( minDRlj, deltaR(jets[ijet],selLeptons[ilep]) );
 		if(minDRlj<0.4) continue;
 
-		//cross-clean with vetoed leptons //FIXME: should not matter as we anyway veto events with additional leptons...
+		// Cross-clean with vetoed leptons //FIXME: should not matter as we anyway veto events with additional leptons...
 		minDRlj = 9999.;
 		for(size_t ilep=0; ilep<vetoLeptons.size(); ilep++) minDRlj = TMath::Min( minDRlj, deltaR(jets[ijet],vetoLeptons[ilep]) );
 		if(minDRlj<0.4) continue;
 
-		//require to pass the loose id
+		// Require to pass the loose id
 		Int_t idbits=jets[ijet].get("idbits");
 		bool passPFloose( ((idbits>>0) & 0x1));
 		if(!passPFloose) continue;
 
-		//top candidate jets
+		// Top candidate jets
 		looseJets.push_back(jets[ijet]);
-		if(jets[ijet].pt()<30 || fabs(jets[ijet].eta())>2.5 ) continue;
+		if(jets[ijet].pt() < 30 || fabs(jets[ijet].eta()) > 2.5 ) continue;
 		selJets.push_back(jets[ijet]);
-		nbtags += (jets[ijet].getVal("csv")>0.405);
+		nbtags += (jets[ijet].getVal("csv")>0.405); // loose
 	}
-	sort(looseJets.begin(),looseJets.end(),data::PhysicsObject_t::sortByCSV);
-	sort(selJets.begin(),  selJets.end(),  data::PhysicsObject_t::sortByCSV);
+	sort(looseJets.begin(), looseJets.end(), data::PhysicsObject_t::sortByCSV);
+	sort(selJets.begin(),   selJets.end(),   data::PhysicsObject_t::sortByCSV);
 	return nbtags;
 }
 
@@ -666,6 +666,7 @@ int main(int argc, char* argv[])
 				controlHistos.fillHisto(ctrlCategs[icat]+"btag_"+label+"_smearpt",   ch,                                       selJets[ijet].getVal("jer"), iweight);
 			}
 		}
+
 
 		// Corresponds to geq3jet1btag_  : presel + three or more jets, one or more b-tags
 		if(passSoftLeptonVeto && pass3JetSelection  && pass1BtagSelection) lxyAn.analyze(selLeptons,selJets,missingEt[0],ev.nvtx,genParticles,weight*wjetsWeight);
