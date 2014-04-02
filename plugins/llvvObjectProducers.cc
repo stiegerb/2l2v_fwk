@@ -32,12 +32,12 @@
 #include "SimDataFormats/TrackingAnalysis/interface/TrackingVertexContainer.h"
 
 #include "EgammaAnalysis/ElectronTools/interface/EGammaCutBasedEleId.h"
-#include "EGamma/EGammaAnalysisTools/interface/PFIsolationEstimator.h"
+#include "EgammaAnalysis/ElectronTools/interface/PFIsolationEstimator.h"
 #include "RecoEgamma/EgammaTools/interface/ConversionTools.h"
 
 #include "HLTrigger/HLTcore/interface/HLTConfigProvider.h"
 
-#include "CMGTools/External/interface/PileupJetIdAlgo.h"
+#include "RecoJets/JetProducers/interface/PileupJetIdAlgo.h"
 
 
 //Tau stuff... somecleaning needed
@@ -132,6 +132,7 @@ llvvObjectProducers::llvvObjectProducers(const edm::ParameterSet &iConfig)
         produces<llvvMuonInfoCollection>();
         produces<llvvElectronInfoCollection>();
         produces<llvvTauCollection>();
+        produces<llvvTauCollection>("boosted");
         produces<llvvPhotonCollection>();
         produces<llvvJetCollection>();
         produces<llvvPFParticleCollection>();
@@ -190,6 +191,9 @@ bool llvvObjectProducers::filter(edm::Event& iEvent, const edm::EventSetup &iSet
 
   std::auto_ptr<llvvTauCollection> tauCollOut(new llvvTauCollection());
   llvvTauCollection& tauColl = *tauCollOut;
+
+  std::auto_ptr<llvvTauCollection> boostedTauCollOut(new llvvTauCollection());
+  llvvTauCollection& boostedTauColl = *boostedTauCollOut;
 
   std::auto_ptr<llvvPhotonCollection> phoCollOut(new llvvPhotonCollection());
   llvvPhotonCollection& phoColl = *phoCollOut;
@@ -434,7 +438,7 @@ bool llvvObjectProducers::filter(edm::Event& iEvent, const edm::EventSetup &iSet
 	iEvent.getByLabel( analysisCfg_.getParameter<edm::InputTag>("beamSpotSource"), beamSpotH);
 	edm::Handle<reco::VertexCollection> vtxH;
 	iEvent.getByLabel( analysisCfg_.getParameter<edm::InputTag>("vtxSource"), vtxH);
-	if(vtxH->size()==0) return false;
+	if(vtxH->size()==0) return false; //also keep events without vertex -> in principle this neverhappens
         nvtx = vtxH->size();
 	reco::VertexRef primVtx(vtxH,0);
 
@@ -450,7 +454,7 @@ bool llvvObjectProducers::filter(edm::Event& iEvent, const edm::EventSetup &iSet
 	// https://twiki.cern.ch/twiki/bin/view/CMS/EgammaCutBasedIdentification
 	// https://twiki.cern.ch/twiki/bin/view/CMS/EgammaPFBasedIsolation
 	//
-        int nElecs=0, nMuons=0, nPhotons=0;
+        int nMuons17(0), nMuons8(0), nElecs17(0), nElecs8(0),  nPhotons=0;
   //////////////////////////////////   //////////////////////////////////   //////////////////////////////////   //////////////////////////////////
   //Muons
 	edm::Handle<View<Candidate> > muH, eH;
@@ -475,7 +479,7 @@ bool llvvObjectProducers::filter(edm::Event& iEvent, const edm::EventSetup &iSet
 		bool isPF( muon->isPFMuon() );
 		bool isGlobal( muon->isGlobalMuon() );
 		bool isTracker( muon->isTrackerMuon() );
-		bool isLoose( isPF && (isGlobal || isTracker) );
+		bool isLoose( isPF && (isGlobal || isTracker) );                
 		if(!isLoose) continue;
 		if(muon->pt()<3 || fabs(muon->eta())>2.5) continue;
 
@@ -560,7 +564,8 @@ bool llvvObjectProducers::filter(edm::Event& iEvent, const edm::EventSetup &iSet
 
                muInfoColl.push_back(muInfo);
                lepColl.push_back(lep);
-               if(muon->pt()>18) nMuons++;
+               if(muon->pt()> 8) nMuons8++;
+               if(muon->pt()>17) nMuons17++;
 	}
 
   //////////////////////////////////   //////////////////////////////////   //////////////////////////////////   //////////////////////////////////
@@ -575,7 +580,7 @@ bool llvvObjectProducers::filter(edm::Event& iEvent, const edm::EventSetup &iSet
 
 		//pre-selection
 		if(ele->gsfTrack().isNull() || ele->superCluster().isNull() || gsfEle==0) continue;
-		if(ele->pt()<10 || !(ele->isEB() || ele->isEE()) )                        continue;
+		if(ele->pt()<8  || !(ele->isEB() || ele->isEE()) )                        continue;
 		bool overlapFound(false);
 		for(unsigned int ilep=0; ilep<lepColl.size(); ilep++)
 		{
@@ -699,15 +704,20 @@ bool llvvObjectProducers::filter(edm::Event& iEvent, const edm::EventSetup &iSet
 
                elInfoColl.push_back(elInfo);
                lepColl.push_back(lep);
-               if(ele->pt()>18) nElecs++;
+               if(ele->pt()> 8) nElecs8++;
+               if(ele->pt()>17) nElecs17++;
 	}
 
 
   //////////////////////////////////   //////////////////////////////////   //////////////////////////////////   //////////////////////////////////
-  //Taus
-        if(analysisCfg_.getParameter<edm::InputTag>("tauSource").label()!=""){
+  //Taus and boostedTaus
+        for(int L=0;L<2;L++){
+        string tauSourceLabel = "tauSource";
+        if(L==1){tauSourceLabel = "boostedTauSource";}
+        
+        if(analysisCfg_.getParameter<edm::InputTag>(tauSourceLabel.c_str()).label()!=""){
 		Handle<pat::TauCollection> tauH;
-		iEvent.getByLabel(analysisCfg_.getParameter<edm::InputTag>("tauSource"), tauH);
+		iEvent.getByLabel(analysisCfg_.getParameter<edm::InputTag>(tauSourceLabel.c_str()), tauH);
 		for(size_t itau=0; itau<tauH->size(); itau++)
 		{
 		   const pat::Tau* tau = &((*tauH)[itau]);
@@ -741,6 +751,12 @@ bool llvvObjectProducers::filter(edm::Event& iEvent, const edm::EventSetup &iSet
 		     tauInfo.z_expo = closestOnTransversePlaneState.globalPosition().z();
 		   }
 
+                   tauInfo.dxy             = tau->dxy();
+                   tauInfo.dxySig          = tau->dxy_Sig();
+                   tauInfo.flightLength    = sqrt(tau->flightLength().Mag2() );
+                   tauInfo.flightLengthSig = tau->flightLengthSig();
+                   tauInfo.hasSV           = tau->hasSecondaryVertex();
+
 		   tauInfo.jet.SetPxPyPzE(tau->pfJetRef().get()->px(), tau->pfJetRef().get()->py(), tau->pfJetRef().get()->pz(), tau->pfJetRef().get()->energy() );
 		   tauInfo.numChargedParticlesSigCone   = tau->signalPFChargedHadrCands().size();
 		   tauInfo.numNeutralHadronsSigCone     = tau->signalPFNeutrHadrCands().size();
@@ -763,61 +779,102 @@ bool llvvObjectProducers::filter(edm::Event& iEvent, const edm::EventSetup &iSet
 		   tauInfo.emfraction                   = tau->emFraction();
 
                    tauInfo.idbits  = 0;
-		   tauInfo.idbits += tau->tauID("decayModeFinding"                           )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::decayModeFinding;
-		   tauInfo.idbits += tau->tauID("byVLooseCombinedIsolationDeltaBetaCorr"     )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::byVLooseCombinedIsolationDeltaBetaCorr;
-		   tauInfo.idbits += tau->tauID("byLooseCombinedIsolationDeltaBetaCorr"      )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::byLooseCombinedIsolationDeltaBetaCorr;
-		   tauInfo.idbits += tau->tauID("byMediumCombinedIsolationDeltaBetaCorr"     )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::byMediumCombinedIsolationDeltaBetaCorr;
-		   tauInfo.idbits += tau->tauID("byTightCombinedIsolationDeltaBetaCorr"      )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::byTightCombinedIsolationDeltaBetaCorr;
-		   tauInfo.idbits += tau->tauID("byLooseCombinedIsolationDeltaBetaCorr3Hits" )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::byLooseCombinedIsolationDeltaBetaCorr3Hits;
-		   tauInfo.idbits += tau->tauID("byMediumCombinedIsolationDeltaBetaCorr3Hits")<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::byMediumCombinedIsolationDeltaBetaCorr3Hits;
-		   tauInfo.idbits += tau->tauID("byTightCombinedIsolationDeltaBetaCorr3Hits" )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::byTightCombinedIsolationDeltaBetaCorr3Hits;
-		   tauInfo.idbits += tau->tauID("byCombinedIsolationDeltaBetaCorrRaw3Hits"   )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::byCombinedIsolationDeltaBetaCorrRaw3Hits;
-		   tauInfo.idbits += tau->tauID("againstElectronLoose"                       )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::againstElectronLoose;                    
-		   tauInfo.idbits += tau->tauID("againstElectronMedium"                      )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::againstElectronMedium;
-		   tauInfo.idbits += tau->tauID("againstElectronTight"                       )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::againstElectronTight;
-		   tauInfo.idbits += tau->tauID("againstElectronMVA3category"                )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::againstElectronMVA3category;
-                   tauInfo.idbits += tau->tauID("againstElectronMVA3raw"                     )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::againstElectronMVA3raw;
-		   tauInfo.idbits += tau->tauID("againstElectronLooseMVA3"                   )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::againstElectronLooseMVA3;
-		   tauInfo.idbits += tau->tauID("againstElectronMediumMVA3"                  )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::againstElectronMediumMVA3;
-		   tauInfo.idbits += tau->tauID("againstElectronTightMVA3"                   )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::againstElectronTightMVA3;
-		   tauInfo.idbits += tau->tauID("againstElectronVTightMVA3"                  )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::againstElectronVTightMVA3;
-		   tauInfo.idbits += tau->tauID("againstMuonLoose"                           )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::againstMuonLoose;
-		   tauInfo.idbits += tau->tauID("againstMuonMedium"                          )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::againstMuonMedium;
-		   tauInfo.idbits += tau->tauID("againstMuonTight"                           )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::againstMuonTight;
-		   tauInfo.idbits += tau->tauID("againstMuonLoose2"                          )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::againstMuonLoose2;
-		   tauInfo.idbits += tau->tauID("againstMuonMedium2"                         )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::againstMuonMedium2;
-		   tauInfo.idbits += tau->tauID("againstMuonTight2"                          )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::againstMuonTight2;
-		   tauInfo.idbits += tau->tauID("againstMuonLoose3"                          )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::againstMuonLoose3;
-		   tauInfo.idbits += tau->tauID("againstMuonTight3"                          )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::againstMuonTight3;
-		   tauInfo.idbits += tau->tauID("byIsolationMVAraw"                          )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::byIsolationMVAraw;
-		   tauInfo.idbits += tau->tauID("byLooseIsolationMVA"                        )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::byLooseIsolationMVA;
-		   tauInfo.idbits += tau->tauID("byMediumIsolationMVA"                       )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::byMediumIsolationMVA;
-		   tauInfo.idbits += tau->tauID("byTightIsolationMVA"                        )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::byTightIsolationMVA;
-		   tauInfo.idbits += tau->tauID("byIsolationMVA2raw"                         )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::byIsolationMVA2raw;
-		   tauInfo.idbits += tau->tauID("byLooseIsolationMVA2"                       )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::byLooseIsolationMVA2;
-		   tauInfo.idbits += tau->tauID("byMediumIsolationMVA2"                      )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::byMediumIsolationMVA2;
-		   tauInfo.idbits += tau->tauID("byTightIsolationMVA2"                       )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::byTightIsolationMVA2;
+                   tauInfo.idbits += tau->tauID("decayModeFindingNewDMs"                     )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::decayModeFindingNewDMs;
+                   tauInfo.idbits += tau->tauID("decayModeFindingOldDMs"                     )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::decayModeFindingOldDMs;
+                   tauInfo.idbits += tau->tauID("decayModeFinding"                           )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::decayModeFinding;
+//                   tauInfo.idbits += tau->tauID("byLooseIsolation"                           )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::byLooseIsolation;
+//                   tauInfo.idbits += tau->tauID("byVLooseCombinedIsolationDeltaBetaCorr"     )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::byVLooseCombinedIsolationDeltaBetaCorr;
+//                   tauInfo.idbits += tau->tauID("byLooseCombinedIsolationDeltaBetaCorr"      )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::byLooseCombinedIsolationDeltaBetaCorr;
+                   tauInfo.idbits += tau->tauID("byMediumCombinedIsolationDeltaBetaCorr"     )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::byMediumCombinedIsolationDeltaBetaCorr;
+                   tauInfo.idbits += tau->tauID("byTightCombinedIsolationDeltaBetaCorr"      )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::byTightCombinedIsolationDeltaBetaCorr;
+                   tauInfo.idbits += tau->tauID("byCombinedIsolationDeltaBetaCorrRaw"        )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::byCombinedIsolationDeltaBetaCorrRaw;
+                   tauInfo.idbits += tau->tauID("byLooseCombinedIsolationDeltaBetaCorr3Hits" )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::byLooseCombinedIsolationDeltaBetaCorr3Hits;
+                   tauInfo.idbits += tau->tauID("byMediumCombinedIsolationDeltaBetaCorr3Hits")<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::byMediumCombinedIsolationDeltaBetaCorr3Hits;
+                   tauInfo.idbits += tau->tauID("byTightCombinedIsolationDeltaBetaCorr3Hits" )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::byTightCombinedIsolationDeltaBetaCorr3Hits;
+                   tauInfo.idbits += tau->tauID("byCombinedIsolationDeltaBetaCorrRaw3Hits"   )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::byCombinedIsolationDeltaBetaCorrRaw3Hits;
+                   tauInfo.idbits += tau->tauID("chargedIsoPtSum"                            )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::chargedIsoPtSum;
+                   tauInfo.idbits += tau->tauID("neutralIsoPtSum"                            )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::neutralIsoPtSum;
+                   tauInfo.idbits += tau->tauID("puCorrPtSum"                                )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::puCorrPtSum;
+                   tauInfo.idbits += tau->tauID("byIsolationMVA3oldDMwoLTraw"                )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::byIsolationMVA3oldDMwoLTraw;
+                   tauInfo.idbits += tau->tauID("byVLooseIsolationMVA3oldDMwoLT"             )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::byVLooseIsolationMVA3oldDMwoLT;
+                   tauInfo.idbits += tau->tauID("byLooseIsolationMVA3oldDMwoLT"              )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::byLooseIsolationMVA3oldDMwoLT;
+                   tauInfo.idbits += tau->tauID("byMediumIsolationMVA3oldDMwoLT"             )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::byMediumIsolationMVA3oldDMwoLT;
+                   tauInfo.idbits += tau->tauID("byTightIsolationMVA3oldDMwoLT"              )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::byTightIsolationMVA3oldDMwoLT;
+                   tauInfo.idbits += tau->tauID("byVTightIsolationMVA3oldDMwoLT"             )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::byVTightIsolationMVA3oldDMwoLT;
+                   tauInfo.idbits += tau->tauID("byVVTightIsolationMVA3oldDMwoLT"            )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::byVVTightIsolationMVA3oldDMwoLT;
+                   tauInfo.idbits += tau->tauID("byIsolationMVA3oldDMwLTraw"                 )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::byIsolationMVA3oldDMwLTraw;
+                   tauInfo.idbits += tau->tauID("byVLooseIsolationMVA3oldDMwLT"              )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::byVLooseIsolationMVA3oldDMwLT;
+                   tauInfo.idbits += tau->tauID("byLooseIsolationMVA3oldDMwLT"               )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::byLooseIsolationMVA3oldDMwLT;
+                   tauInfo.idbits += tau->tauID("byMediumIsolationMVA3oldDMwLT"              )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::byMediumIsolationMVA3oldDMwLT;
+                   tauInfo.idbits += tau->tauID("byTightIsolationMVA3oldDMwLT"               )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::byTightIsolationMVA3oldDMwLT;
+                   tauInfo.idbits += tau->tauID("byVTightIsolationMVA3oldDMwLT"              )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::byVTightIsolationMVA3oldDMwLT;
+                   tauInfo.idbits += tau->tauID("byVVTightIsolationMVA3oldDMwLT"             )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::byVVTightIsolationMVA3oldDMwLT;
+                   tauInfo.idbits += tau->tauID("byIsolationMVA3newDMwoLTraw"                )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::byIsolationMVA3newDMwoLTraw;
+                   tauInfo.idbits += tau->tauID("byVLooseIsolationMVA3newDMwoLT"             )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::byVLooseIsolationMVA3newDMwoLT;
+                   tauInfo.idbits += tau->tauID("byLooseIsolationMVA3newDMwoLT"              )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::byLooseIsolationMVA3newDMwoLT;
+                   tauInfo.idbits += tau->tauID("byMediumIsolationMVA3newDMwoLT"             )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::byMediumIsolationMVA3newDMwoLT;
+                   tauInfo.idbits += tau->tauID("byTightIsolationMVA3newDMwoLT"              )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::byTightIsolationMVA3newDMwoLT;
+                   tauInfo.idbits += tau->tauID("byVTightIsolationMVA3newDMwoLT"             )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::byVTightIsolationMVA3newDMwoLT;
+                   tauInfo.idbits += tau->tauID("byVVTightIsolationMVA3newDMwoLT"            )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::byVVTightIsolationMVA3newDMwoLT;
+                   tauInfo.idbits += tau->tauID("byIsolationMVA3newDMwLTraw"                 )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::byIsolationMVA3newDMwLTraw;
+                   tauInfo.idbits += tau->tauID("byVLooseIsolationMVA3newDMwLT"              )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::byVLooseIsolationMVA3newDMwLT;
+                   tauInfo.idbits += tau->tauID("byLooseIsolationMVA3newDMwLT"               )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::byLooseIsolationMVA3newDMwLT;
+                   tauInfo.idbits += tau->tauID("byMediumIsolationMVA3newDMwLT"              )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::byMediumIsolationMVA3newDMwLT;
+                   tauInfo.idbits += tau->tauID("byTightIsolationMVA3newDMwLT"               )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::byTightIsolationMVA3newDMwLT;
+                   tauInfo.idbits += tau->tauID("byVTightIsolationMVA3newDMwLT"              )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::byVTightIsolationMVA3newDMwLT;
+                   tauInfo.idbits += tau->tauID("byVVTightIsolationMVA3newDMwLT"             )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::byVVTightIsolationMVA3newDMwLT;
+                   tauInfo.idbits += tau->tauID("againstElectronLoose"                       )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::againstElectronLoose;
+                   tauInfo.idbits += tau->tauID("againstElectronMedium"                      )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::againstElectronMedium;
+                   tauInfo.idbits += tau->tauID("againstElectronTight"                       )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::againstElectronTight;
+                   tauInfo.idbits += tau->tauID("againstElectronMVA5raw"                     )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::againstElectronMVA5raw;
+                   tauInfo.idbits += tau->tauID("againstElectronMVA5category"                )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::againstElectronMVA5category;
+                   tauInfo.idbits += tau->tauID("againstElectronVLooseMVA5"                  )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::againstElectronVLooseMVA5;
+                   tauInfo.idbits += tau->tauID("againstElectronMediumMVA5"                  )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::againstElectronMediumMVA5;
+                   tauInfo.idbits += tau->tauID("againstElectronTightMVA5"                   )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::againstElectronTightMVA5;
+                   tauInfo.idbits += tau->tauID("againstElectronVTightMVA5"                  )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::againstElectronVTightMVA5;
+                   tauInfo.idbits += tau->tauID("againstElectronDeadECAL"                    )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::againstElectronDeadECAL;
+                   tauInfo.idbits += tau->tauID("againstMuonLoose"                           )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::againstMuonLoose;
+                   tauInfo.idbits += tau->tauID("againstMuonMedium"                          )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::againstMuonMedium;
+                   tauInfo.idbits += tau->tauID("againstMuonTight"                           )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::againstMuonTight;
+                   tauInfo.idbits += tau->tauID("againstMuonLoose2"                          )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::againstMuonLoose2;
+                   tauInfo.idbits += tau->tauID("againstMuonMedium2"                         )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::againstMuonMedium2;
+                   tauInfo.idbits += tau->tauID("againstMuonTight2"                          )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::againstMuonTight2;
+                   tauInfo.idbits += tau->tauID("againstMuonLoose3"                          )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::againstMuonLoose3;
+                   tauInfo.idbits += tau->tauID("againstMuonTight3"                          )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::againstMuonTight3;
+                   tauInfo.idbits += tau->tauID("againstMuonMVAraw"                          )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::againstMuonMVAraw;
+                   tauInfo.idbits += tau->tauID("againstMuonLooseMVA"                        )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::againstMuonLooseMVA;
+                   tauInfo.idbits += tau->tauID("againstMuonMediumMVA"                       )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::againstMuonMediumMVA;
+                   tauInfo.idbits += tau->tauID("againstMuonTightMVA"                        )<=0.5 ? 0 : (uint64_t) 1 << llvvTAUID::againstMuonTightMVA;
 
 
                    //save charged hadron information
+		   //commented: check me Loic
+		   /*
        	           for(unsigned int iCharged=0; iCharged < tau->signalPFChargedHadrCands().size() && iCharged<3; iCharged++){
-		      const reco::PFCandidateRef& cand = tau->signalPFChargedHadrCands().at(iCharged);
+		     const reco::PFCandidateRef& cand = tau->signalPFChargedHadrCands().at(iCharged);
 	   	      math::XYZTLorentzVector candP4 = cand->p4();
                       tauInfo.tracks.push_back(LorentzVectorF(candP4.px(), candP4.py(), candP4.pz(), candP4.energy()));
 	           }
+		   */
 
                    //save neutral hadron information
+		   //commented: Check me Loic
+		   /*
  	           for(unsigned int iPi0=0; iPi0 < tau->signalPiZeroCandidates().size() && iPi0<2; iPi0++){
-		      const reco::RecoTauPiZero& cand = tau->signalPiZeroCandidates().at(iPi0);
-		      math::XYZTLorentzVector candP4 = cand.p4();
+		     const reco::RecoTauPiZero& cand = tau->signalPiZeroCandidates().at(iPi0);
+		      math::XYZTLorentzVector candP4 = cand->p4();
                       tauInfo.pi0s.push_back(LorentzVectorF(candP4.px(), candP4.py(), candP4.pz(), candP4.energy()));
  	           }
+		   */
 
                    if(tauInfo.pt()>tauPtCut && (tauInfo.idbits&tauIdMask)>0 ){
-                      tauColl.push_back(tauInfo);
+                      if(L==0){     tauColl.push_back(tauInfo);
+                      }else{ boostedTauColl.push_back(tauInfo);
+                      }
                    }
 		}
         }
+        }//end loop on different Tau sources
 
 
   //////////////////////////////////   //////////////////////////////////   //////////////////////////////////   //////////////////////////////////
@@ -904,12 +961,12 @@ bool llvvObjectProducers::filter(edm::Event& iEvent, const edm::EventSetup &iSet
   for(unsigned int itrig=0; itrig<triggerCats.size(); itrig++){
       if(!triggerBits[itrig]) continue;
       int cat=triggerCats[itrig];
-      if     (cat==11   && nElecs==0)                continue;
-      else if(cat==13   && nMuons==0)                continue;
+      if     (cat==11   && nElecs17==0)              continue;
+      else if(cat==13   && nMuons17==0)              continue;
       else if(cat==22   && nPhotons==0)              continue;
-      else if(cat==1111 && nElecs<2)                 continue;
-      else if(cat==1113 && (nMuons==0 || nElecs==0)) continue;
-      else if(cat==1313 && nMuons<2)                 continue;
+      else if(cat==1111 && nElecs8<2)                 continue;
+      else if(cat==1113 && (nMuons8+nElecs17<2 || nMuons17+nElecs8<2)) continue;
+      else if(cat==1313 && nMuons8<2)                 continue;
       filterOut=false;
       break;
     }
@@ -934,7 +991,7 @@ bool llvvObjectProducers::filter(edm::Event& iEvent, const edm::EventSetup &iSet
 		iEvent.getByLabel("trackCountingHighPurBJetTags",                  tchpTags);          
 		iEvent.getByLabel("jetProbabilityBJetTags",                        jpTags);            
 		iEvent.getByLabel("simpleSecondaryVertexHighEffBJetTags",          ssvheTags);  
-		iEvent.getByLabel("simpleInclusiveSecondaryVertexHighEffBJetTags", ivfTags); 
+		//iEvent.getByLabel("simpleInclusiveSecondaryVertexHighEffBJetTags", ivfTags); 
 		iEvent.getByLabel("combinedSecondaryVertexBJetTags",               origcsvTags);       
 		iEvent.getByLabel("combinedSecondaryVertexRetrainedBJetTags",      csvTags);           
 		iEvent.getByLabel("combinedCSVJPBJetTags",                         jpcsvTags);         
@@ -994,12 +1051,12 @@ bool llvvObjectProducers::filter(edm::Event& iEvent, const edm::EventSetup &iSet
 			jet.tchp        = (*tchpTags)[ijet].second;
 			jet.jp          = (*jpTags)[ijet].second;
 			jet.ssvhe       = (*ssvheTags)[ijet].second;
-			jet.ivf         = (*ivfTags)[ijet].second;
-			jet.origcsv     = (*origcsvTags)[ijet].second;
-			jet.csv         = (*csvTags)[ijet].second;
-			jet.jpcsv       = (*jpcsvTags)[ijet].second;
-			jet.slcsv       = (*slcsvTags)[ijet].second;
-			jet.supercsv    = (*supercsvTags)[ijet].second;
+			jet.ivf         = ivfTags.isValid() ? (*ivfTags)[ijet].second : 0;
+			jet.origcsv     = origcsvTags.isValid() ? (*origcsvTags)[ijet].second : 0;
+			jet.csv         = csvTags.isValid() ?  (*csvTags)[ijet].second : 0;
+			jet.jpcsv       = jpcsvTags.isValid() ?  (*jpcsvTags)[ijet].second : 0;
+			jet.slcsv       = slcsvTags.isValid() ? (*slcsvTags)[ijet].second : 0;
+			jet.supercsv    = supercsvTags.isValid() ? (*supercsvTags)[ijet].second : 0;
 
 			//secondary vertex from associated tracks
 			if(svTagInfo.isValid() && svTagInfo->size()>ijet);
@@ -1049,8 +1106,9 @@ bool llvvObjectProducers::filter(edm::Event& iEvent, const edm::EventSetup &iSet
 				}
 			}
 
-			PileupJetIdentifier cutBasedPuIdentifier = cutBasedPuJetIdAlgo_->computeIdVariables(dynamic_cast<const reco::Jet*>(patjet), 0, primVtx.get(), *vtxH.product(), true);
-			PileupJetIdentifier puIdentifier         = puJetIdAlgo_->computeIdVariables(dynamic_cast<const reco::Jet*>(patjet), 0, primVtx.get(), *vtxH.product(), true);
+                        float jec=1./jet.torawsf;
+                        PileupJetIdentifier cutBasedPuIdentifier = cutBasedPuJetIdAlgo_->computeIdVariables(dynamic_cast<const reco::Jet*>(patjet->originalObject()), jec, primVtx.get(), *vtxH.product(), true);
+                        PileupJetIdentifier puIdentifier         = puJetIdAlgo_->computeIdVariables(dynamic_cast<const reco::Jet*>(patjet->originalObject()), jec, primVtx.get(), *vtxH.product(), true);
 			jet.beta        = puIdentifier.beta();
 			jet.betaStar    = puIdentifier.betaStar();
 			jet.dRMean      = puIdentifier.dRMean();
@@ -1201,6 +1259,7 @@ bool llvvObjectProducers::filter(edm::Event& iEvent, const edm::EventSetup &iSet
        iEvent.put(genEvOut);
        iEvent.put(lepCollOut);         
        iEvent.put(tauCollOut);
+       iEvent.put(boostedTauCollOut, "boosted");
        iEvent.put(phoCollOut);
        iEvent.put(jetCollOut);
        iEvent.put(pfCollOut);

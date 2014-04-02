@@ -7,7 +7,7 @@
 
 //#include "TObject.h"
 
-#define MAXDATAOBJECTS 1000
+#define MAXDATAOBJECTS 2000
 
 typedef ROOT::Math::LorentzVector<ROOT::Math::PxPyPzE4D<double> > LorentzVector;
 
@@ -75,7 +75,7 @@ class DataEventSummary //: public TObject
   Float_t mn_nMatches[MAXDATAOBJECTS], mn_nMatchedStations[MAXDATAOBJECTS], mn_validMuonHits[MAXDATAOBJECTS], mn_innerTrackChi2[MAXDATAOBJECTS], mn_trkLayersWithMeasurement[MAXDATAOBJECTS], mn_pixelLayersWithMeasurement[MAXDATAOBJECTS];
 
   //jets
-  Int_t jn, jn_idbits[MAXDATAOBJECTS], jn_pfstart[MAXDATAOBJECTS], jn_pfend[MAXDATAOBJECTS];
+  Int_t jn,jnUnf, jn_idbits[MAXDATAOBJECTS], jn_pfstart[MAXDATAOBJECTS], jn_pfend[MAXDATAOBJECTS];
   Float_t jn_px[MAXDATAOBJECTS],    jn_py[MAXDATAOBJECTS],      jn_pz[MAXDATAOBJECTS],          jn_en[MAXDATAOBJECTS], jn_torawsf[MAXDATAOBJECTS];
   Float_t jn_neutHadFrac[MAXDATAOBJECTS], jn_neutEmFrac[MAXDATAOBJECTS], jn_chHadFrac[MAXDATAOBJECTS], jn_muFrac[MAXDATAOBJECTS], jn_area[MAXDATAOBJECTS];
   Float_t jn_tchp[MAXDATAOBJECTS], jn_jp[MAXDATAOBJECTS], jn_origcsv[MAXDATAOBJECTS], jn_csv[MAXDATAOBJECTS], jn_jpcsv[MAXDATAOBJECTS], jn_slcsv[MAXDATAOBJECTS], jn_supercsv[MAXDATAOBJECTS], jn_ssvhe[MAXDATAOBJECTS], jn_ivf[MAXDATAOBJECTS];
@@ -86,6 +86,8 @@ class DataEventSummary //: public TObject
   Int_t   jn_genflav[MAXDATAOBJECTS], jn_genid[MAXDATAOBJECTS];
   Float_t jn_genpx[MAXDATAOBJECTS], jn_genpy[MAXDATAOBJECTS], jn_genpz[MAXDATAOBJECTS], jn_genen[MAXDATAOBJECTS];
   Float_t jn_genjpx[MAXDATAOBJECTS], jn_genjpy[MAXDATAOBJECTS], jn_genjpz[MAXDATAOBJECTS], jn_genjen[MAXDATAOBJECTS];
+  Float_t jn_genUnfjpx[MAXDATAOBJECTS], jn_genUnfjpy[MAXDATAOBJECTS], jn_genUnfjpz[MAXDATAOBJECTS], jn_genUnfjen[MAXDATAOBJECTS];
+
   
   //met 
   Int_t metn;
@@ -93,6 +95,28 @@ class DataEventSummary //: public TObject
 
   DataEventSummary() { } 
   ~DataEventSummary() { }
+  
+  //
+  void checkBoundaries()
+  {
+    bool doWarn(false);
+    if(pfn>MAXDATAOBJECTS)   { doWarn=true; pfn=MAXDATAOBJECTS; }
+    if(metn>MAXDATAOBJECTS)  { doWarn=true; metn=MAXDATAOBJECTS; }
+    if(gn>MAXDATAOBJECTS)    { doWarn=true; gn=MAXDATAOBJECTS; }
+    if(jn>MAXDATAOBJECTS)    { doWarn=true; jn=MAXDATAOBJECTS; }
+    if(jnUnf>MAXDATAOBJECTS) { doWarn=true; jnUnf=MAXDATAOBJECTS; }
+    if(egn>MAXDATAOBJECTS)   { doWarn=true; egn=MAXDATAOBJECTS; }
+    if(ln>MAXDATAOBJECTS)    { doWarn=true; ln=MAXDATAOBJECTS; }
+    if(tn>MAXDATAOBJECTS)    { doWarn=true; tn=MAXDATAOBJECTS; }
+    if(doWarn){
+      std::cout << "[DataEventSummary][checkBoundaries] one or more counters found to be above MAXDATAOBJECTS - limited "
+		<< " run=" << run
+		<< " event=" << event
+		<< " lumi=" << lumi
+		<< std::endl;
+    }
+
+  }
 
   //
   void reset()
@@ -108,6 +132,7 @@ class DataEventSummary //: public TObject
     mn=0; 
     gn=0;
     jn=0;
+    jnUnf=0;
     metn=0;
   }
 

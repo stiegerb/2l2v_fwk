@@ -6,32 +6,37 @@ Mailto: pietro.vischia at gmail.com
 
 Analyze
 -------
+cd $CMSSW_BASE/src/UserCode/llvv_fwk/
 
-runLocalAnalysisOverSamples.py -e runChHiggsAnalysis -j data/ch-higgs_samples.json -d /afs/cern.ch/work/v/vischia/private/store/539_ntuples/ -o /afs/cern.ch/work/v/vischia/private/code/tau_dilepton/chhiggs_5311_b/ -c test/runAnalysis_cfg.py.templ -p "@runSystematics=True @saveSummaryTree=False" -s 8nh
+# Process ntuples
+sh test/chhiggs/doAnal.sh current anal_sus
+sh test/chhiggs/doAnal.sh current anal_sm
+# Produce plots, tables and datacards
+sh test/chhiggs/doAnal.sh current plots
+sh test/chhiggs/doAnal.sh current tables
+sh test/chhiggs/doAnal.sh current datacards
+# Copy plots for putting in AN
+sh test/chhiggs/doAnal.sh current put
 
-runLocalAnalysisOverSamples.py -e runChHiggsAnalysis -j data/ch-higgs_samples.json -d /afs/cern.ch/work/v/vischia/private/store/5311_ntuples/ -o /afs/cern.ch/work/v/vischia/private/code/tau_dilepton/chhiggs_5311_b/ -c test/runAnalysis_cfg.py.templ -p "@runSystematics=True @saveSummaryTree=False" -s 8nh
-runLocalAnalysisOverSamples.py -e runChHiggsAnalysis -j data/top_samples.json      -d /store/cmst3/user/psilva/5311_ntuples/             -o /afs/cern.ch/work/v/vischia/private/code/tau_dilepton/chhiggs_5311_b/     -c test/runAnalysis_cfg.py.templ -p "@runSystematics=True @saveSummaryTree=False" -s 8nh
+
+
+### FWLite test
+runLocalAnalysisOverSamples.py -e runChHiggsAnalysisFWLite -j $CMSSW_BASE/src/UserCode/llvv_fwk/data/zhtautau_samples.json -o /afs/cern.ch/work/v/vischia/private/code/tau_dilepton/chhiggs_5311_fwlite/ -d  /store/group/phys_higgs/cmshzz2l2v/2013_08_30/ -c $CMSSW_BASE/src/UserCode/llvv_fwk/test/runAnalysis_cfg.py.templ -p "@useMVA=True @saveSummaryTree=True @runSystematics=True @automaticSwitch=False @is2011=False @jacknife=0 @jacks=0" -s 8nh
 
 
 Plots & tables
 --------------
 
-runPlotter --iLumi 19702 --inDir /afs/cern.ch/work/v/vischia/private/code/tau_dilepton/chhiggs_5311/ --outDir /afs/cern.ch/work/v/vischia/private/code/tau_dilepton/chhiggs_5311/plots --json data/plot-ch-higgs_samples.json --outFile /afs/cern.ch/work/v/vischia/private/code/tau_dilepton/chhiggs_5311/plotter-with-ch-higgs.root --showUnc --plotExt .png
-runPlotter --iLumi 19702 --inDir /afs/cern.ch/work/v/vischia/private/code/tau_dilepton/chhiggs_5311/ --outDir /afs/cern.ch/work/v/vischia/private/code/tau_dilepton/chhiggs_5311/plots --json data/top_samples.json --outFile /afs/cern.ch/work/v/vischia/private/code/tau_dilepton/chhiggs_5311/plotter-smonly.root --showUnc --plotExt .png  
 
---onlyStartWith emu_evtflow
+### FWLite test
+runPlotterFWLite --iEcm 8 --iLumi 19577 --inDir /afs/cern.ch/work/v/vischia/private/code/tau_dilepton/chhiggs_5311_fwlite/ --outDir /afs/cern.ch/work/v/vischia/private/code/tau_dilepton/chhiggs_5311_fwlite/plots/ --outFile /afs/cern.ch/work/v/vischia/private/code/tau_dilepton/chhiggs_5311_fwlite/plotter.root  --json $CMSSW_BASE/src/UserCode/llvv_fwk/data/zhtautau_samples.json
+
 
 Tables only
 -----------
-runPlotter --iLumi 19702 --inDir /afs/cern.ch/work/v/vischia/private/code/tau_dilepton/chhiggs_5311/ --outDir /afs/cern.ch/work/v/vischia/private/code/tau_dilepton/chhiggs_5311/plots --json data/ch-higgs_samples.json --outFile /afs/cern.ch/work/v/vischia/private/code/tau_dilepton/chhiggs_5311/plotter-all-ch-higgs.root --noPlot --noPowers 
-runPlotter --iLumi 19702 --inDir /afs/cern.ch/work/v/vischia/private/code/tau_dilepton/chhiggs_5311/ --outDir /afs/cern.ch/work/v/vischia/private/code/tau_dilepton/chhiggs_5311/plots --json data/top_samples.json --outFile /afs/cern.ch/work/v/vischia/private/code/tau_dilepton/chhiggs_5311/plotter-sm-only.root --noPlot --noPowers 
-
-
 
 Datacards
 ---------
-prepareChHiggsDatacards  --in /afs/cern.ch/work/v/vischia/private/code/tau_dilepton/chhiggs_5311/plotter-with-ch-higgs.root --out /afs/cern.ch/work/v/vischia/private/code/tau_dilepton/chhiggs_5311/datacards/ --json data/plot-ch-higgs_samples.json --noPowers --histo evtflow --bin 5  
-
 
 Options
 --out       --> output director

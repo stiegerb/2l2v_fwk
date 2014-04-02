@@ -27,9 +27,11 @@
 #include "TPaveText.h"
 #include "THStack.h"
 
-#include "UserCode/llvv_fwk/src/tdrstyle.C"
+#include "UserCode/llvv_fwk/interface/tdrstyle.h"
 #include "UserCode/llvv_fwk/interface/MacroUtils.h"
-#include "UserCode/llvv_fwk/src/JSONWrapper.cc"
+#include "UserCode/llvv_fwk/interface/JSONWrapper.h"
+
+using namespace std;
 
 int cutIndex=-1;
 string cutIndexStr="";
@@ -796,14 +798,20 @@ void ConvertToTex(JSONWrapper::Object& Root, std::string RootDir, NameAndType Hi
 
          fprintf(pFile, "\\begin{table}[htp]\n");
          fprintf(pFile, "\\begin{center}\n");
-         fprintf(pFile, "\\caption{}\n");
-         fprintf(pFile, "\\label{tab:table}\n");
+         fprintf(pFile, "\\caption{%2.2s}\n", hist->GetName());
+         fprintf(pFile, "\\label{tab:table%10s}\n", hist->GetName());
 
          string colfmt = "|l";  for(int b=1;b<=hist->GetXaxis()->GetNbins();b++){colfmt = colfmt + "c";} colfmt+="|";
          string colname = "";   for(int b=1;b<=hist->GetXaxis()->GetNbins();b++){
             std::string tempcolname =  hist->GetXaxis()->GetBinLabel(b);
             if(tempcolname.find("_")!=std::string::npos || tempcolname.find("^")!=std::string::npos)tempcolname = string("$") + tempcolname + "$";
-            colname = colname + "& " + tempcolname;
+	    while(tempcolname.find("#")!=std::string::npos)tempcolname.replace(tempcolname.find("#"),1,"$\\");
+	    if(tempcolname.find("$\\wedge")!=std::string::npos)tempcolname.replace(tempcolname.find("$\\wedge"),8,"\\wedge");
+	    if(tempcolname.find("$\\geq")!=std::string::npos)tempcolname.replace(tempcolname.find("$\\geq"),5,"$\\geq$");
+	    if(tempcolname.find("{miss}")!=std::string::npos)tempcolname.replace(tempcolname.find("{miss}"),6,"{miss}$");
+	    if(tempcolname.find("40 GeV$")!=std::string::npos)tempcolname.replace(tempcolname.find("40 GeV$"),7,"40 GeV"); // This is too specific. Better to change the labels from the beginning 
+	    if(tempcolname.find("$\\tau")!=std::string::npos)tempcolname.replace(tempcolname.find("$\\tau"),6,"\\tau"); // This is too specific. Better to change the labels from the beginning 
+	    colname = colname + "& " + tempcolname;
          }
          fprintf(pFile, "\\begin{tabular}{ %s } \\hline\n", colfmt.c_str());
          fprintf(pFile, "Process %s \\\\ \\hline\\hline\n", colname.c_str());

@@ -38,6 +38,8 @@ procList=json.load(jsonFile,encoding='utf-8').items()
 
 if(opt.outDir.find('/store/')==0):
    os.system("cmsMkdir " + opt.outDir) #make sure that the output dir exist
+elif(opt.outDir.find('/lustre/ncg.ingrid.pt/')==0):
+   os.system("mkdir " + opt.outDir) 
 elif(opt.outDir.find('srm://')==0):
    os.system('source /nfs/soft/grid/ui/setup/grid-env.sh; voms-proxy-init -voms cms -valid 192:00; mkdir -p /nfs/home/fynu/quertenmont/x509_user_proxy; cp $X509_USER_PROXY /nfs/home/fynu/quertenmont/x509_user_proxy/proxy')#all must be done in the same command to avoid environement problems
 
@@ -64,7 +66,7 @@ for proc in procList :
                if(dirToClean.find('/storage/data/cms/store/')): dirToClean = dirToClean.replace('/storage/data/cms/store/', '/storage_rw/data/cms/store/') #Hack for Louvain T2
                removeDuplicates(dirToClean);
 
-            filenames=fillFromStore(inputdir,0,-1,False)
+            filenames=LaunchOnCondor.natural_sort(fillFromStore(inputdir,0,-1,False))
             nfiles=len(filenames)
             filenames=addPrefixSuffixToFileList("   '", filenames, "',")
 
@@ -91,6 +93,9 @@ for proc in procList :
                 #LaunchOnCondor.ListToFile(filenames[startFile:endFile], "/tmp/InputFile_"+d['dtag']+".txt")                
                 if(mergedFilePath.find('castor')>=0) :
                    LaunchOnCondor.Jobs_FinalCmds = ['pwd', 'ls -lth', 'rfcp '+mergedFileName+' ' + mergedFilePath]
+                # lustre condition must be before /store/ condition (/lustre/ path contains /store/ string) 
+                elif(mergedFilePath.find('/lustre/ncg.ingrid.pt/')==0):
+                    LaunchOnCondor.Jobs_FinalCmds = ['pwd', 'ls -lth', 'cp '+mergedFileName+' ' + mergedFilePath]
                 elif(mergedFilePath.find('/store/')==0):
                    LaunchOnCondor.Jobs_FinalCmds = ['pwd', 'ls -lth', 'cmsStageOut '+mergedFileName+' ' + mergedFilePath]
                 elif(mergedFilePath.find('srm://')==0):

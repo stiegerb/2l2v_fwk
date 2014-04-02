@@ -12,7 +12,7 @@ process.load("Configuration.Geometry.GeometryIdeal_cff")
 ## MessageLogger
 process.load("FWCore.MessageLogger.MessageLogger_cfi")
 process.MessageLogger.cerr.FwkReport.reportEvery = 5000
-process.options   = cms.untracked.PSet( wantSummary = cms.untracked.bool(True),
+process.options   = cms.untracked.PSet( wantSummary = cms.untracked.bool(False),#True),
                                         SkipEvent = cms.untracked.vstring('ProductNotFound')
                                         ) 
 
@@ -24,6 +24,7 @@ except:
     else    : inputList = cms.untracked.vstring('/store/data//Run2012A/DoubleMu/AOD//22Jan2013-v1/20000/F4C34C30-B581-E211-8269-003048FFD7A2.root') 
 process.source = cms.Source("PoolSource",
                             fileNames = inputList
+                            #,skipEvents=cms.untracked.uint32(4000) 
                             )
 
 try:
@@ -101,7 +102,7 @@ process.toomanystripclus53X.forcedValue     = cms.untracked.bool(False)
 process.logErrorTooManyClusters.taggedMode  = cms.untracked.bool(True)
 process.logErrorTooManyClusters.forcedValue = cms.untracked.bool(False)  
 
-process.metFilteringTaggers = cms.Sequence(process.HBHENoiseFilter*
+process.metFilteringTaggers = cms.Sequence(#process.HBHENoiseFilter*
                                            process.hcalLaserEventFilter *
                                            process.EcalDeadCellTriggerPrimitiveFilter *
                                            process.eeBadScFilter *
@@ -138,16 +139,16 @@ process.load('EgammaAnalysis.ElectronTools.electronIdMVAProducer_cfi')
 process.eidMVASequence = cms.Sequence(  process.mvaTrigV0 + process.mvaNonTrigV0 )
 process.patElectronsPFlow.electronIDSources.mvaTrigV0    = cms.InputTag("mvaTrigV0")
 process.patElectronsPFlow.electronIDSources.mvaNonTrigV0 = cms.InputTag("mvaNonTrigV0")
-from SHarper.HEEPAnalyzer.HEEPSelectionCuts_cfi import *
-process.selectedPatElectronsPFlowHeep = cms.EDProducer("HEEPAttStatusToPAT",
-                                                       eleLabel = cms.InputTag("selectedPatElectronsWithTrigger"),
-                                                       barrelCuts = cms.PSet(heepBarrelCuts),
-                                                       endcapCuts = cms.PSet(heepEndcapCuts),
-                                                       applyRhoCorrToEleIsol = cms.bool(True),
-                                                       eleIsolEffectiveAreas = cms.PSet (heepEffectiveAreas),
-                                                       eleRhoCorrLabel = cms.InputTag("kt6PFJets:rho"),
-                                                       verticesLabel = cms.InputTag("goodOfflinePrimaryVertices"),
-                                                       )
+#from SHarper.HEEPAnalyzer.HEEPSelectionCuts_cfi import *   #FIXME
+#process.selectedPatElectronsPFlowHeep = cms.EDProducer("HEEPAttStatusToPAT",
+#                                                       eleLabel = cms.InputTag("selectedPatElectronsWithTrigger"),
+#                                                       barrelCuts = cms.PSet(heepBarrelCuts),
+#                                                       endcapCuts = cms.PSet(heepEndcapCuts),
+#                                                       applyRhoCorrToEleIsol = cms.bool(True),
+#                                                       eleIsolEffectiveAreas = cms.PSet (heepEffectiveAreas),
+#                                                       eleRhoCorrLabel = cms.InputTag("kt6PFJets:rho"),
+#                                                       verticesLabel = cms.InputTag("goodOfflinePrimaryVertices"),
+#                                                       )
 
 #custom muons
 process.patMuonsPFlow.pfMuonSource = cms.InputTag("pfSelectedMuonsPFlow")
@@ -162,7 +163,7 @@ getattr(process,"pfNoElectron"+postfix).enable = False # to use electron-cleaned
 getattr(process,"pfNoTau"+postfix).enable = False      # to use tau-cleaned jet collection set to True (check what is a tau)
 getattr(process,"pfNoJet"+postfix).enable = True       # this i guess it's for photons...      
 
-#add q/g discriminator
+#add q/g discriminator  #FIXME
 process.load('QuarkGluonTagger.EightTeV.QGTagger_RecoJets_cff')
 process.QGTagger.srcJets    = cms.InputTag("selectedPatJets"+postfix)
 process.QGTagger.isPatJet  = cms.untracked.bool(True)
@@ -179,7 +180,7 @@ process.kt6PFJetsCentral = kt4PFJets.clone( rParam = cms.double(0.6),
                                             Rho_EtaMax = cms.double(2.5),
                                             Ghost_EtaMax = cms.double(2.5) )
 
-from UserCode.llvv_fwk.btvDefaultSequence_cff import *
+from UserCode.llvv_fwk.btvDefaultSequence_cff import * 
 btvDefaultSequence(process,isMC,"selectedPatJets"+postfix,"goodOfflinePrimaryVertices")
 
 # cf. https://twiki.cern.ch/twiki/bin/view/CMSPublic/WorkBookMetAnalysis
@@ -192,6 +193,7 @@ process.pfType1CorrectedMet.srcType1Corrections = cms.VInputTag( cms.InputTag('p
 
 
 #the analyzer
+print'here'
 from UserCode.llvv_fwk.dataAnalyzer_cfi import *
 try:
     if runDijetsAnalysis :
@@ -204,7 +206,14 @@ except:
         process.dataAnalyzer.cfg.triggerCats[2]=1113
         process.dataAnalyzer.cfg.triggerCats[3]=1113
         print 'Tweaking for tau embedded samples'
-        
+    try:
+        if is7TeV:
+            print '7 TeV run'
+            process.dataAnalyzer.cfg.triggerPaths=triggerPaths7TeV[0]
+            process.dataAnalyzer.cfg.triggerCats=triggerCats7TeV
+    except:
+        print '8 TeV run'
+print'got here'
 process.dataAnalyzer.cfg.storeAllPF=storeAllPF
 
 try:
@@ -231,9 +240,10 @@ process.p = cms.Path( process.startCounter
                       *getattr(process,"patPF2PATSequence"+postfix)
                       *process.btvSequence
                       *process.kt6PFJetsCentral
-                      *process.qgSequence
+                      *process.qgSequence  #FIXME
                       *process.type0PFMEtCorrection*process.producePFMETCorrections
-                      *process.selectedPatElectronsWithTrigger*process.selectedPatElectronsPFlowHeep
+                      *process.selectedPatElectronsWithTrigger
+#                      *process.selectedPatElectronsPFlowHeep  #FIXME - not needed most probably? Tomislav if you want this one fix it ;)
                       *process.selectedPatMuonsTriggerMatch 
                       *process.dataAnalyzer
                       )

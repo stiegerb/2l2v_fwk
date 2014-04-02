@@ -6,6 +6,7 @@ import sys
 import glob
 import fnmatch
 import commands
+import re
 
 CopyRights  = '####################################\n'
 CopyRights += '#        LaunchOnFarm Script       #\n'
@@ -31,6 +32,15 @@ Jobs_FinalCmds    = []
 Jobs_RunHere      = 0
 
 useLSF = True
+useLIP = True
+
+
+def natural_sort(l): 
+    convert = lambda text: int(text) if text.isdigit() else text.lower() 
+    alphanum_key = lambda key: [ convert(c) for c in re.split('([0-9]+)', key) ] 
+    return sorted(l, key = alphanum_key)
+
+
 
 def usage() :
       print 'LaunchOnCondor [options]'
@@ -83,8 +93,7 @@ def CreateTheShellFile(argv):
 	global Jobs_RunHere
 	global Jobs_FinalCmds
         global absoluteShellPath
-        Path_Shell = Farm_Directories[1]+Jobs_Index+Jobs_Name+'.sh'
-
+        Path_Shell = Farm_Directories[1]+'script'+Jobs_Index+Jobs_Name+'.sh'
         function_argument=''
         for i in range(2,len(argv)):
                 function_argument+="%s" % argv[i]
@@ -147,6 +156,11 @@ def CreateTheShellFile(argv):
 		if Jobs_RunHere==0:
 			shell_file.write('cd -\n')
 		shell_file.write('cmsRun ' + os.getcwd() + '/'+Path_Cfg + '\n')
+        elif argv[0]=='LIP':        
+                CreateTheConfigFile(argv);
+                if Jobs_RunHere==0:
+                        shell_file.write('cd -\n')
+                shell_file.write('cmsRun ' + os.getcwd() + '/'+Path_Cfg + '\n')
 	else:
 		print #Program to use is not specified... Guess it is bash command		
                 shell_file.write('#Program to use is not specified... Guess it is bash command\n')
@@ -165,6 +179,7 @@ def CreateTheShellFile(argv):
 
 def CreateTheCmdFile():
         global useLSF
+        global useLIP
         global Path_Cmd
         global CopyRights
         Path_Cmd   = Farm_Directories[1]+Jobs_Name+'.cmd'
@@ -173,6 +188,7 @@ def CreateTheCmdFile():
 	if useLSF:
 		cmd_file.write(CopyRights + '\n')
 	else:
+            if(not useLIP):
 		cmd_file.write('Universe                = vanilla\n')
 		cmd_file.write('Environment             = CONDORJOBID=$(Process)\n')
 		cmd_file.write('notification            = Error\n')
@@ -199,12 +215,17 @@ def AddJobToCmdFile():
 	       cmd_file.write("bsub -q " + Jobs_Queue + " -R " + Jobs_LSFRequirement + " -J " + Jobs_Name+Jobs_Index + " '" + absoluteShellPath + " 0 ele'\n")
 #               cmd_file.write("bsub -q " + Jobs_Queue + " -J " + Jobs_Name+Jobs_Index + " '" + os.getcwd() + "/"+Path_Shell + " 0 ele'\n")
 	else:
+            if(not useLIP):
         	cmd_file.write('\n')
 	        cmd_file.write('Executable              = %s\n'     % Path_Shell)
         	cmd_file.write('output                  = %s.out\n' % Path_Log)
 	        cmd_file.write('error                   = %s.err\n' % Path_Log)
         	cmd_file.write('log                     = %s.log\n' % Path_Log)
 	        cmd_file.write('Queue 1\n')
+            else:
+                absoluteShellPath = Path_Shell;
+                if(not os.path.isabs(absoluteShellPath)): absoluteShellPath= os.getcwd() + "/" + absoluteShellPath
+                cmd_file.write("sh " + absoluteShellPath)
         cmd_file.close()
 
 def CreateDirectoryStructure(FarmDirectory):
@@ -239,15 +260,18 @@ def SendCluster_LoadInputFiles(path, NJobs):
 
 def SendCluster_Create(FarmDirectory, JobName):
 	global useLSF
+        global useLIP
 	global Jobs_Name
 	global Jobs_Count
         global Farm_Directories
 
 	#determine if the submission system is LSF batch or condor
 	command_out = commands.getstatusoutput("bjobs")[1]
+        command_lip = commands.getstatusoutput("qstat")[1]
 	if(command_out.find("command not found")<0): useLSF = True
 	else:				  	     useLSF = False;
-
+        if(command_lip.find("command not found")<0): useLIP = True
+        else:                                        useLIP = False;
 	Jobs_Name  = JobName
 	Jobs_Count = 0
         CreateDirectoryStructure(FarmDirectory)
@@ -275,12 +299,15 @@ def SendCluster_Push(Argv):
 
 def SendCluster_Submit():
         global useLSF
+        global useLIP
 	global CopyRights
         global Jobs_Count
         global Path_Cmd
 
 	if useLSF:
 		os.system("sh " + Path_Cmd)
+        elif useLIP:
+                os.system("qsub " + Path_Cmd)
 	else:
 		os.system("condor_submit " + Path_Cmd)  
 
@@ -322,7 +349,7 @@ def GetListOfFiles(Prefix, InputPattern, Suffix):
       List = sorted(List)
       for i in range(len(List)):
          List[i] = Prefix + List[i] + Suffix
-      return List
+      return natural_sort(List)
 
 
 def ListToString(InputList):
@@ -342,7 +369,10 @@ def FileToList(path):
    input_lines = input_file.readlines()
    input_file.close()
    input_lines.sort()
-   return input_lines
+   return natural_sort(input_lines)
+
+
+
 
 
 
@@ -355,6 +385,7 @@ def SendCMSMergeJob(FarmDirectory, JobName, InputFiles, OutputFile, KeepStatemen
 		return
 
         InputFilesString = ''
+        InputFiles = natural_sort(InputFiles)
         for i in range(len(InputFiles)):
 		InputFilesString += "process.source.fileNames.extend([" + InputFiles[i].replace(',',' ') + '])\n'
 
@@ -378,6 +409,7 @@ def SendCMSMergeJob(FarmDirectory, JobName, InputFiles, OutputFile, KeepStatemen
         cfg_file.write('%s\n' % InputFilesString)
         cfg_file.write('process.OUT = cms.OutputModule("PoolOutputModule",\n')
         cfg_file.write('    outputCommands = cms.untracked.vstring(%s),\n' % KeepStatement)
+        cfg_file.write('    eventAutoFlushCompressedSize=cms.untracked.int32(15*1024*1024),\n')
         cfg_file.write('    fileName = cms.untracked.string(%s)\n' % OutputFile)
         cfg_file.write(')\n')
         cfg_file.write('\n')
@@ -386,4 +418,8 @@ def SendCMSMergeJob(FarmDirectory, JobName, InputFiles, OutputFile, KeepStatemen
         SendCluster_Push  (["CMSSW", Temp_Cfg])
         SendCluster_Submit()
         os.system('rm '+ Temp_Cfg)
+
+
+
+
 

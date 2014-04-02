@@ -31,12 +31,12 @@
 #include "SimDataFormats/TrackingAnalysis/interface/TrackingVertexContainer.h"
 
 #include "EgammaAnalysis/ElectronTools/interface/EGammaCutBasedEleId.h"
-#include "EGamma/EGammaAnalysisTools/interface/PFIsolationEstimator.h"
+#include "EgammaAnalysis/ElectronTools/interface/PFIsolationEstimator.h"
 #include "RecoEgamma/EgammaTools/interface/ConversionTools.h"
 
 #include "HLTrigger/HLTcore/interface/HLTConfigProvider.h"
 
-#include "CMGTools/External/interface/PileupJetIdAlgo.h"
+#include "RecoJets/JetProducers/interface/PileupJetIdAlgo.h"
 
 #include "TH1D.h"
 
@@ -48,28 +48,32 @@ using namespace edm;
 using namespace reco;
 
 //
-class DataAnalyzer : public edm::EDAnalyzer 
+class DataAnalyzer : public edm::EDAnalyzer
 {
 
 public:
   DataAnalyzer(const edm::ParameterSet &iConfig);
   void beginLuminosityBlock(const edm::LuminosityBlock &iLumi, const edm::EventSetup & iSetup );
   void endLuminosityBlock(const edm::LuminosityBlock & iLumi, const edm::EventSetup & iSetup);
-  virtual void beginRun(const edm::Run & iRun, edm::EventSetup const & iSetup); 
+  virtual void beginRun(const edm::Run & iRun, edm::EventSetup const & iSetup);
   virtual void analyze( const edm::Event &iEvent, const edm::EventSetup &iSetup) ;
- 
+  virtual void endJob();
+
 private:
 
   //  keep all GEN
   bool keepFullGenInfo_,storeAllPF_;
 
+  //  skip trigger selection for MC
+  bool skipMCTrigSelection_;
+
   //monitoring
   DataEventSummaryHandler summary_;
   TH1D *obsPU_h, *truePU_h, *cutflow_h, *trigger_h,*filter_h;
-  
+
   //selection configuration
   edm::ParameterSet analysisCfg_;
-  
+
   //tool to trace prescale changes
   HLTConfigProvider hltConfig_;
 
@@ -78,21 +82,26 @@ private:
 
   //pileup jet id
   PileupJetIdAlgo *puJetIdAlgo_,*cutBasedPuJetIdAlgo_;
+
+  bool DEBUG;
+
 };
 
 using namespace std;
 
 
 //
-DataAnalyzer::DataAnalyzer(const edm::ParameterSet &iConfig) : obsPU_h(0), truePU_h(0)
+DataAnalyzer::DataAnalyzer(const edm::ParameterSet &iConfig) : obsPU_h(0), truePU_h(0), DEBUG(false)
 {
   //configure selection
   analysisCfg_ = iConfig.getParameter<edm::ParameterSet>("cfg");
   std::vector<string> trigs=analysisCfg_.getParameter<std::vector<string> >("triggerPaths");
   std::vector<string> filts=analysisCfg_.getParameter<std::vector<string> >("metFilters");
-  keepFullGenInfo_ = false; 
+  keepFullGenInfo_ = false; storeAllPF_ = false;
+  skipMCTrigSelection_ = false;
   keepFullGenInfo_ = analysisCfg_.getParameter<bool>("keepFullGenInfo");
   storeAllPF_ = analysisCfg_.getParameter<bool>("storeAllPF");
+  skipMCTrigSelection_ = analysisCfg_.getParameter<bool>("skipMCTrigSelection");
 
   //init monitoring tools
   edm::Service<TFileService> fs;
@@ -116,13 +125,14 @@ DataAnalyzer::DataAnalyzer(const edm::ParameterSet &iConfig) : obsPU_h(0), trueP
   //pileup jet id
   puJetIdAlgo_ = new PileupJetIdAlgo( analysisCfg_.getParameter< std::vector<edm::ParameterSet> >( "pujetidAlgo")[0] );
   cutBasedPuJetIdAlgo_ = new PileupJetIdAlgo( analysisCfg_.getParameter< std::vector<edm::ParameterSet> >( "pujetidAlgo")[1] );
+
 }
 
 //
-void DataAnalyzer::beginLuminosityBlock(const edm::LuminosityBlock&lumi, const edm::EventSetup & setup ) 
+void DataAnalyzer::beginLuminosityBlock(const edm::LuminosityBlock&lumi, const edm::EventSetup & setup )
 {
   edm::Handle<LumiSummary> l;
-  lumi.getByLabel("lumiProducer", l); 
+  lumi.getByLabel("lumiProducer", l);
   if (!l.isValid())  return;
   summary_.getEvent().instLumi = l->avgInsDelLumi();
 }
@@ -144,20 +154,25 @@ void DataAnalyzer::endLuminosityBlock(const edm::LuminosityBlock & iLumi, const 
 }
 
 //
-void DataAnalyzer::beginRun(const edm::Run & iRun, const edm::EventSetup & iSetup) 
+void DataAnalyzer::beginRun(const edm::Run & iRun, const edm::EventSetup & iSetup)
 {
   bool changed(true);
   hltConfig_.init(iRun, iSetup,"HLT",changed);
 }
 
 //
-void DataAnalyzer::analyze(const edm::Event &event, const edm::EventSetup &iSetup) 
+void DataAnalyzer::endJob()
+{
+}
+
+//
+void DataAnalyzer::analyze(const edm::Event &event, const edm::EventSetup &iSetup)
 {
   bool isData=event.isRealData();
 
   //event summary to be filled
   DataEventSummary &ev=summary_.getEvent();
-  
+
   //event header
   ev.run    = event.id().run();
   ev.lumi   = event.luminosityBlock();
@@ -233,7 +248,8 @@ void DataAnalyzer::analyze(const edm::Event &event, const edm::EventSetup &iSetu
 	const reco::GenParticle & p = dynamic_cast<const reco::GenParticle &>( (*genParticlesH)[i] );
 	if(abs(p.pdgId())==2212 && p.status()==4) isSherpa=true; //this is only used by sherpa
 	bool isHardProc(p.status()==3);
-	bool isStableOfInterest( keepFullGenInfo_ && p.status()==1 && ((abs(p.pdgId())==22 && p.pt()>20) || (p.charge()!=0 && p.pt()>0.5 && fabs(p.eta())<3.0 )) );
+	bool isStableOfInterest( keepFullGenInfo_ && p.status()==1 && p.charge()!=0 && p.pt()>0.5 && fabs(p.eta())<3.0 );
+	isStableOfInterest |= (p.status()==1 && abs(p.pdgId())==22 && p.pt()>20 && fabs(p.eta())<2.5);  // I really need this line always active...
 	if(!isHardProc && !isStableOfInterest) continue;
 
 	//check if lepton is ok to accept (for unfolding purposes)
@@ -245,17 +261,16 @@ void DataAnalyzer::analyze(const edm::Event &event, const edm::EventSetup &iSetu
 	    else
 	      {
 		leptonIsOkToAccept &= passLepAccCut;
-		
+
 		//madgraph and pythia-based
 		if(  p.numberOfMothers()  == 1 &&  p.mother()->pdgId() != p.pdgId() && p.mother()->pdgId() != 23 && abs (p.mother()->pdgId() ) != 24 ) leptonIsOkToAccept=false;
-		
+
 		//sherpa-like
 		if(  p.numberOfMothers()  == 2 && (abs(p.mother(0)->pdgId()) != abs(p.pdgId()) ||  abs(p.mother(1)->pdgId()) != abs(p.pdgId())) )  leptonIsOkToAccept=false;
 	      }
 	  }
 	nHardProcGenLeptons += leptonIsOkToAccept;
 	nHardProcGenBosons  += (isHardProc && (abs(p.pdgId())==24 || abs(p.pdgId())==23));
-	
 
 	ev.mc_id[ev.mcn]=p.pdgId();
 	ev.mc_status[ev.mcn]=p.status();
@@ -264,7 +279,7 @@ void DataAnalyzer::analyze(const edm::Event &event, const edm::EventSetup &iSetu
 	ev.mc_pz[ev.mcn]=p.pz();
 	ev.mc_en[ev.mcn]=p.energy();
 	ev.mc_lxy[ev.mcn]=0;
-	
+
 	//check if photon is prompt or radiated from quark/line
 	if(fabs(p.pdgId())==22)
 	  {
@@ -276,11 +291,11 @@ void DataAnalyzer::analyze(const edm::Event &event, const edm::EventSetup &iSetu
 		isPrompt=true;
 	      }
 	    if(!isPrompt) ev.mc_lxy[ev.mcn]=99999.;
-	  } 
-	
+	  }
+
 	ev.mcn++;
       }
-    
+
     // FSR photons (if full gen info is set to true)
     if(keepFullGenInfo_)
       {
@@ -290,7 +305,7 @@ void DataAnalyzer::analyze(const edm::Event &event, const edm::EventSetup &iSetu
 	    const reco::GenParticle & p = dynamic_cast<const reco::GenParticle &>( (*genParticlesH)[i] );
 	    if (!(abs(p.pdgId()) == 22 && p.pt() <= 20 &&  p.pt() > 1e-6 ) ) continue ;  // cut to cover the missing phase space
 	    for(int j = 0; j < NGenPart; j++ ){
-	        if ( fabs(ev.mc_status[j]) != 1 && fabs(ev.mc_status[j]) != 3 ) continue; 
+	        if ( fabs(ev.mc_status[j]) != 1 && fabs(ev.mc_status[j]) != 3 ) continue;
 	        if(fabs(ev.mc_id[j]) != 11 && fabs(ev.mc_id[j]) != 13 ) continue;
 	    	LorentzVector p4(ev.mc_px[j],ev.mc_py[j], ev.mc_pz[j], ev.mc_en[j]);
 		if( deltaR( p4.eta(), p4.phi(), p.eta(), p.phi()) > 0.15) continue;
@@ -305,7 +320,7 @@ void DataAnalyzer::analyze(const edm::Event &event, const edm::EventSetup &iSetu
 	      }
 	  }
       }
-    
+
     //heavy flavors
     for (size_t i=0; i<genParticlesH->size(); i++)
       {
@@ -321,14 +336,14 @@ void DataAnalyzer::analyze(const edm::Event &event, const edm::EventSetup &iSetu
 	    if(d==0) continue;
 	    int absid=abs(d->pdgId());
 	    if(!utils::cmssw::isBhadron(absid)) continue;
-	    
+
 	    //find first stable particle to trace decay length
 	    const reco::Candidate *gd=d;
 	    while(1)
 	      {
 		if(gd->status()==1) break;
 		if(gd==0 || gd->numberOfDaughters()==0) break;
-		const reco::Candidate *newGd=gd; 
+		const reco::Candidate *newGd=gd;
 		for(size_t k=0; k<gd->numberOfDaughters(); k++)
 		  {
 		    if(gd->daughter(k)->pdgId()==22) continue;
@@ -345,16 +360,16 @@ void DataAnalyzer::analyze(const edm::Event &event, const edm::EventSetup &iSetu
 	    //save B-hadron information
 	    ev.mc_id[ev.mcn]     = d->pdgId();
 	    ev.mc_status[ev.mcn] = d->status();
-	    ev.mc_px[ev.mcn]     = d->px();  
-	    ev.mc_py[ev.mcn]     = d->py();  
-	    ev.mc_pz[ev.mcn]     = d->pz(); 
-	    ev.mc_en[ev.mcn]     = d->energy();  
+	    ev.mc_px[ev.mcn]     = d->px();
+	    ev.mc_py[ev.mcn]     = d->py();
+	    ev.mc_pz[ev.mcn]     = d->pz();
+	    ev.mc_en[ev.mcn]     = d->energy();
 	    ev.mc_lxy[ev.mcn]    = sqrt(pow(vxMother-vxDaughter,2)+pow(vyMother-vyDaughter,2));
-	    ev.mcn++; 
+	    ev.mcn++;
 	  }
       }
   }
-  
+
   //
   // trigger (require at least for data)
   //
@@ -362,11 +377,11 @@ void DataAnalyzer::analyze(const edm::Event &event, const edm::EventSetup &iSetu
   std::vector<std::string> triggerPaths = analysisCfg_.getParameter<std::vector<std::string> >("triggerPaths");
   std::vector<int> triggerCats          = analysisCfg_.getParameter<std::vector<int> >("triggerCats");
 
-  ev.tn = triggerPaths.size();  
+  ev.tn = triggerPaths.size();
   edm::Handle<edm::TriggerResults> triggerBitsH;
   event.getByLabel( trigSource, triggerBitsH);
   const edm::TriggerNames &triggerNames = event.triggerNames( *triggerBitsH );
-  
+
   for(int i=0; i<ev.tn; i++) { ev.t_bits[i]=0; ev.t_prescale[i]=0; }
   for (size_t itrig = 0; itrig != triggerBitsH->size(); ++itrig)
     {
@@ -382,7 +397,6 @@ void DataAnalyzer::analyze(const edm::Event &event, const edm::EventSetup &iSetu
 	  break;
 	}
     }
-
 
   //
   // vertex, beam spot, avg energy densities
@@ -411,11 +425,11 @@ void DataAnalyzer::analyze(const edm::Event &event, const edm::EventSetup &iSetu
   // https://twiki.cern.ch/twiki/bin/view/CMS/EgammaCutBasedIdentification
   // https://twiki.cern.ch/twiki/bin/view/CMS/EgammaPFBasedIsolation
   //
-  ev.ln=0; ev.egn=0; ev.mn=0; 
+  ev.ln=0; ev.egn=0; ev.mn=0;
   edm::Handle<View<Candidate> > muH, eH;
   event.getByLabel( analysisCfg_.getParameter<edm::InputTag>("muonSource"),     muH);
   event.getByLabel( analysisCfg_.getParameter<edm::InputTag>("electronSource"), eH);
-  int nMuons(0), nElecs(0);
+  int nMuons17(0), nMuons8(0), nElecs17(0), nElecs8(0);
   edm::Handle<reco::ConversionCollection> convH;
   event.getByLabel( analysisCfg_.getParameter<edm::InputTag>("conversionSource"), convH);
   EcalClusterLazyTools egLazyTool( event, iSetup, analysisCfg_.getParameter<edm::InputTag>("ebrechitsSource"), analysisCfg_.getParameter<edm::InputTag>("eerechitsSource") );
@@ -426,14 +440,16 @@ void DataAnalyzer::analyze(const edm::Event &event, const edm::EventSetup &iSetu
       const pat::Muon *muon         = dynamic_cast<const pat::Muon *>( muonPtr.get() );
       const reco::Candidate *genLep = muon->genLepton();
 
-      //apply a loose pre-selection to our muon candidates 
+      //apply a loose pre-selection to our muon candidates
       bool isPF( muon->isPFMuon() );
       bool isGlobal( muon->isGlobalMuon() );
       bool isTracker( muon->isTrackerMuon() );
       bool isLoose( isPF && (isGlobal || isTracker) );
-      if(!isLoose) continue;
+//      if(!isLoose) continue;
       if(muon->pt()<3 || fabs(muon->eta())>2.5) continue;
-      
+
+      try{
+
       //store information
       ev.ln_id[ev.ln]                         = -13*muon->charge();
       ev.ln_pid[ev.ln]                        = ev.mn;
@@ -449,7 +465,7 @@ void DataAnalyzer::analyze(const edm::Event &event, const edm::EventSetup &iSetu
       ev.ln_trkpt[ev.ln]                      = isGlobal ? muon->globalTrack()->pt()                                    : muon->innerTrack()->pt();
       ev.ln_trketa[ev.ln]                     = isGlobal ? muon->globalTrack()->eta()                                   : muon->innerTrack()->eta();
       ev.ln_trkphi[ev.ln]                     = isGlobal ? muon->globalTrack()->phi()                                   : muon->innerTrack()->phi();
-      ev.ln_trkchi2[ev.ln]                    = isGlobal ? muon->globalTrack()->normalizedChi2()                        : muon->innerTrack()->normalizedChi2();	  
+      ev.ln_trkchi2[ev.ln]                    = isGlobal ? muon->globalTrack()->normalizedChi2()                        : muon->innerTrack()->normalizedChi2();
       ev.ln_trkValidPixelHits[ev.ln]          = isGlobal ? muon->globalTrack()->hitPattern().numberOfValidPixelHits()   : muon->innerTrack()->hitPattern().numberOfValidPixelHits();
       ev.ln_trkValidTrackerHits[ev.ln]        = isGlobal ? muon->globalTrack()->hitPattern().numberOfValidTrackerHits() : muon->innerTrack()->hitPattern().numberOfValidTrackerHits();
       ev.ln_trkLostInnerHits[ev.ln]           = muon->innerTrack()->trackerExpectedHitsInner().numberOfLostHits();
@@ -480,17 +496,17 @@ void DataAnalyzer::analyze(const edm::Event &event, const edm::EventSetup &iSetu
       ev.mn_trkLayersWithMeasurement[ev.mn]   = muon->track()->hitPattern().trackerLayersWithMeasurement();
       ev.mn_pixelLayersWithMeasurement[ev.mn] = isTracker ? muon->innerTrack()->hitPattern().pixelLayersWithMeasurement() : 0.;
 
-      bool isTight( isPF                                 && isGlobal              
-		    && fabs(ev.ln_d0[ev.ln])<0.2 	 && fabs(ev.ln_dZ[ev.ln])<0.5         && ev.ln_trkValidPixelHits[ev.ln]>0         && ev.ln_trkchi2[ev.ln]<10. 
+      bool isTight( isPF                                 && isGlobal
+		    && fabs(ev.ln_d0[ev.ln])<0.2 	 && fabs(ev.ln_dZ[ev.ln])<0.5         && ev.ln_trkValidPixelHits[ev.ln]>0         && ev.ln_trkchi2[ev.ln]<10.
 		    && ev.mn_validMuonHits[ev.mn]>0.     && ev.mn_nMatchedStations[ev.mn]>1   && ev.mn_trkLayersWithMeasurement[ev.mn]>5 );
-      bool isSoft(isTracker && muon->muonID("TMOneStationTight") 
+      bool isSoft(isTracker && muon->muonID("TMOneStationTight")
 		  && fabs(ev.ln_d0[ev.ln])<3.  && fabs(ev.ln_dZ[ev.ln])<30.
 		  && ev.mn_trkLayersWithMeasurement[ev.mn]>5 && ev.mn_pixelLayersWithMeasurement[ev.mn]>1  && ev.mn_innerTrackChi2[ev.mn] < 1.8 );
-      bool isHighNew = muon::isHighPtMuon(dynamic_cast<const reco::Muon &>(*muon), dynamic_cast<const reco::Vertex &> (*primVtx)) ;
+      bool isHighNew = muon::isHighPtMuon(dynamic_cast<const reco::Muon &>(*muon), dynamic_cast<const reco::Vertex &> (*primVtx), reco::improvedTuneP) ;
 
-      
+
       //save id summary
-      ev.ln_idbits[ev.ln]                     = 
+      ev.ln_idbits[ev.ln]                     =
 	( (int(muon->muonID("GlobalMuonPromptTight")) & 0x1)   << 0)
 	| ( (int(muon->muonID("TMLastStationLoose")) & 0x1)    << 1)
 	| ( (int(muon->muonID("TMLastStationTight")) & 0x1)    << 2)
@@ -503,22 +519,28 @@ void DataAnalyzer::analyze(const edm::Event &event, const edm::EventSetup &iSetu
 	| ( isSoft                                             << 9)
 	| ( isTight                                            << 10)
 	| ( isHighNew                                          << 11);
-      
+
       //add trigger match
       int TrigSum(0);
       for(size_t it=0; it<triggerPaths.size(); it++)
 	{
 	  string tempTrigName = triggerPaths[it] + "*";
-	  if ( muon->triggerObjectMatchesByPath(tempTrigName).size() > 0 ) TrigSum |= (1<<it); 
+	  if ( muon->triggerObjectMatchesByPath(tempTrigName).size() > 0 ) TrigSum |= (1<<it);
 	}
       ev.ln_Tbits[ev.ln] = TrigSum ;
 
       //increment
       ev.ln++;
       ev.mn++;
-      if(muon->pt()>18) nMuons++;
+      if(muon->pt()> 8) nMuons8++;
+      if(muon->pt()>17) nMuons17++;
+
+      }catch(std::exception &e){
+	cout << "@muon selection "<< e.what() << endl;
+	continue;
+      }
     }
-  
+
   for(size_t iele=0; iele< eH->size(); ++iele)
     {
       reco::CandidatePtr elePtr       = eH->ptrAt(iele);
@@ -526,9 +548,11 @@ void DataAnalyzer::analyze(const edm::Event &event, const edm::EventSetup &iSetu
       const reco::Candidate *genLep   = ele->genLepton();
       const reco::GsfElectron *gsfEle = dynamic_cast<const reco::GsfElectron *>(ele);
 
+      try{
+
       //pre-selection
       if(ele->gsfTrack().isNull() || ele->superCluster().isNull() || gsfEle==0) continue;
-      if(ele->pt()<10 || !(ele->isEB() || ele->isEE()) )                        continue;
+      if(ele->pt()<8  || !(ele->isEB() || ele->isEE()) )                        continue;
       bool overlapFound(false);
       for(int ilep=0; ilep<ev.ln; ilep++)
 	{
@@ -561,6 +585,7 @@ void DataAnalyzer::analyze(const edm::Event &event, const edm::EventSetup &iSetu
       ev.ln_trkPtErr[ev.ln]                   = fabs(ele->gsfTrack()->ptError()/ele->gsfTrack()->pt());
       ev.ln_d0[ev.ln]                         = fabs(ele->gsfTrack()->dxy(primVtx->position()));
       ev.ln_dZ[ev.ln]                         = fabs(ele->gsfTrack()->dz(primVtx->position()));
+
       std::pair<bool,Measurement1D> ip3dRes = utils::cmssw::getImpactParameter<reco::GsfTrackRef>(ele->gsfTrack(), primVtx, iSetup, true);
       ev.ln_ip3d[ev.ln]                       = ip3dRes.second.value();
       ev.ln_ip3dsig[ev.ln]                    = ip3dRes.second.significance();
@@ -581,15 +606,15 @@ void DataAnalyzer::analyze(const edm::Event &event, const edm::EventSetup &iSetu
       ev.ln_puchIso04[ev.ln]                  = 0;
       ev.ln_nhIso04[ev.ln]                    = eIsolator04_.getIsolationNeutral();
       ev.egn_isConv[ev.egn]                   = ConversionTools::hasMatchedConversion(*gsfEle,convH,beamSpotH->position());
-      ev.egn_eopin[ev.egn]                    = ele->eSuperClusterOverP(); 
+      ev.egn_eopin[ev.egn]                    = ele->eSuperClusterOverP();
       ev.egn_eopout[ev.egn]                   = ele->eEleClusterOverPout();
       ev.egn_sce[ev.egn]                      = ele->superCluster()->energy();
       ev.egn_sceta[ev.egn]                    = ele->superCluster()->eta();
       ev.egn_scphi[ev.egn]                    = ele->superCluster()->phi();
       ev.egn_fbrem[ev.egn]                    = ele->fbrem();
       ev.egn_sihih[ev.egn]                    = ele->sigmaIetaIeta();
-      vector<float> cov                       = egLazyTool.localCovariances(*ele->superCluster()->seed()); 
-      ev.egn_sipip[ev.egn]                    = sqrt(cov[2]); 
+      vector<float> cov                       = egLazyTool.localCovariances(*ele->superCluster()->seed());
+      ev.egn_sipip[ev.egn]                    = sqrt(cov[2]);
       ev.egn_sihip[ev.egn]                    = cov[1];
       ev.egn_r9[ev.egn]                       = egLazyTool.e3x3(*ele->superCluster()->seed())/ele->superCluster()->rawEnergy();
       ev.egn_mvatrigv0[ev.egn]                = ele->electronID("mvaTrigV0");
@@ -601,7 +626,7 @@ void DataAnalyzer::analyze(const edm::Event &event, const edm::EventSetup &iSetu
 
       //save id summary
       bool hasVetoId(false);
-      ev.ln_idbits[ev.ln] = 
+      ev.ln_idbits[ev.ln] =
 	(ele->ecalDrivenSeed()                                                                                  << 0)
 	| ( ele->trackerDrivenSeed()                                                                            << 1)
 	| ( EgammaCutBasedEleId::PassEoverPCuts(ev.egn_sceta[ev.egn],ev.egn_eopin[ev.egn],ev.egn_fbrem[ev.egn]) << 2);
@@ -612,13 +637,14 @@ void DataAnalyzer::analyze(const edm::Event &event, const edm::EventSetup &iSetu
 	  if(iid==1) id=EgammaCutBasedEleId::LOOSE;
 	  if(iid==2) id=EgammaCutBasedEleId::MEDIUM;
 	  if(iid==3) id=EgammaCutBasedEleId::TIGHT;
-	  bool hasId=EgammaCutBasedEleId::PassWP( EgammaCutBasedEleId::WorkingPoint(id), ele->isEB(), ele->pt(), ele->eta(), 
-						  ev.egn_detain[ev.egn], ev.egn_dphiin[ev.egn], ev.egn_sihih[ev.egn], ev.egn_hoe[ev.egn], ev.egn_ooemoop[ev.egn], 
-						  ev.ln_d0[ev.ln], ev.ln_dZ[ev.ln], 
+	  bool hasId=EgammaCutBasedEleId::PassWP( EgammaCutBasedEleId::WorkingPoint(id), ele->isEB(), ele->pt(), ele->eta(),
+						  ev.egn_detain[ev.egn], ev.egn_dphiin[ev.egn], ev.egn_sihih[ev.egn], ev.egn_hoe[ev.egn], ev.egn_ooemoop[ev.egn],
+						  ev.ln_d0[ev.ln], ev.ln_dZ[ev.ln],
 						  0., 0., 0., ev.egn_isConv[ev.egn], ev.ln_trkLostInnerHits[ev.ln], *rho);
 	  if(iid==0) hasVetoId=hasId;
 	  ev.ln_idbits[ev.ln] |=  (hasId << (3+iid));
 	}
+      //        if ( DEBUG ) cout << "electrons: " << ele->pt()<< "   " << ele->eta()<<"    " << ele->photonIso() <<"  " << ele->chargedHadronIso() << "   " <<  ele->puChargedHadronIso() <<"   " << ele->neutralHadronIso() << "  ID: " <<passesMediumID  << endl;
       for(size_t iid=0; iid<2; iid++)
 	{
 	  int id(EgammaCutBasedEleId::TRIGGERTIGHT);
@@ -630,7 +656,7 @@ void DataAnalyzer::analyze(const edm::Event &event, const edm::EventSetup &iSetu
 	  ev.ln_idbits[ev.ln] |= (hasId << (7+iid));
 	}
 
-      // add heep selector , they have quite a few 
+      // add heep selector , they have quite a few
       bool boolHeep( ele -> userInt("HEEPId") < 1 ) ;
       ev.ln_idbits[ev.ln] |= ( boolHeep <<  9 ) ;
 
@@ -639,7 +665,7 @@ void DataAnalyzer::analyze(const edm::Event &event, const edm::EventSetup &iSetu
       for(size_t it=0; it<triggerPaths.size(); it++)
 	{
 	  string tempTrigName = triggerPaths[it] + "*";
-	  if ( ele->triggerObjectMatchesByPath(tempTrigName).size() > 0 ) TrigSum |= (1<<it); 
+	  if ( ele->triggerObjectMatchesByPath(tempTrigName).size() > 0 ) TrigSum |= (1<<it);
 	}
       ev.ln_Tbits[ev.ln] = TrigSum ;
       //require a very loose baseline id
@@ -648,7 +674,14 @@ void DataAnalyzer::analyze(const edm::Event &event, const edm::EventSetup &iSetu
       //increment counters
       ev.ln++;
       ev.egn++;
-      if(ele->pt()>18) nElecs++;
+      if(ele->pt()> 8) nElecs8++;
+      if(ele->pt()>17) nElecs17++;
+
+      }catch(std::exception &e){
+	cout << "@electron selection "<< e.what() << endl;
+	continue;
+      }
+
     }
 
   //
@@ -666,6 +699,10 @@ void DataAnalyzer::analyze(const edm::Event &event, const edm::EventSetup &iSetu
 	const reco::Photon *pho = dynamic_cast<const reco::Photon *>( photonH->ptrAt(ipho).get() );
 	if(pho==0) continue;
 	if(pho->pt()<20 || !(pho->isEB() || pho->isEE())) continue;
+
+	try{
+
+
 	bool matchesElectron(ConversionTools::hasMatchedPromptElectron(pho->superCluster(), gsfEleH, convH, beamSpotH->position()));
 	bool matchesMuon(false);
 	for(int ilep=0; ilep<ev.ln; ilep++)
@@ -677,7 +714,7 @@ void DataAnalyzer::analyze(const edm::Event &event, const edm::EventSetup &iSetu
 	    break;
 	  }
 	if(matchesElectron || matchesMuon) continue;
-	
+
 	ev.gn_pid[ev.gn]                        = ev.egn;
 	ev.gn_px[ev.gn]                         = pho->px();
 	ev.gn_py[ev.gn]                         = pho->py();
@@ -707,8 +744,8 @@ void DataAnalyzer::analyze(const edm::Event &event, const edm::EventSetup &iSetu
 	ev.egn_scphi[ev.egn]                    = pho->superCluster()->phi();
 	ev.egn_fbrem[ev.egn]                    = 0;
 	ev.egn_sihih[ev.egn]                    = pho->sigmaIetaIeta();
-	vector<float> cov                       = egLazyTool.localCovariances(*pho->superCluster()->seed()); 
-	ev.egn_sipip[ev.egn]                    = sqrt(cov[2]); 
+	vector<float> cov                       = egLazyTool.localCovariances(*pho->superCluster()->seed());
+	ev.egn_sipip[ev.egn]                    = sqrt(cov[2]);
 	ev.egn_sihip[ev.egn]                    = cov[1];
 	ev.egn_r9[ev.egn]                       = egLazyTool.e3x3(*pho->superCluster()->seed())/pho->superCluster()->rawEnergy();
 	ev.egn_mvatrigv0[ev.egn]                = 0;
@@ -729,11 +766,15 @@ void DataAnalyzer::analyze(const edm::Event &event, const edm::EventSetup &iSetu
 	  }
 
 	ev.gn_idbits[ev.gn]    = (isLoose << 0) | (isMedium << 1 ) | (isTight << 2);
+
 	ev.gn++;
 	ev.egn++;
 	if(isLoose && pho->isEB() && ev.egn_r9[ev.egn]>0.9 && pho->pt()>20) nPhotons++;
-      }
 
+	}catch(std::exception &e){
+	  cout << "@photon selection "<< e.what() << endl;
+	}
+      }
 
   //now check if at least one trigger condition is fullfilled
   bool toSave(false);
@@ -742,40 +783,41 @@ void DataAnalyzer::analyze(const edm::Event &event, const edm::EventSetup &iSetu
     {
       if(!ev.t_bits[itrig]) continue;
       int cat=triggerCats[itrig];
-      if     (cat==11   && nElecs==0)                continue;
-      else if(cat==13   && nMuons==0)                continue;
+      if     (cat==11   && nElecs17==0)              continue;
+      else if(cat==13   && nMuons17==0)              continue;
       else if(cat==22   && nPhotons==0)              continue;
-      else if(cat==1111 && nElecs<2)                 continue;
-      else if(cat==1113 && (nMuons==0 || nElecs==0)) continue;
-      else if(cat==1313 && nMuons<2)                 continue;
+      else if(cat==1111 && nElecs8<2)                 continue;
+      else if(cat==1113 && (nMuons8+nElecs17<2 || nMuons17+nElecs8<2)) continue;
+      else if(cat==1313 && nMuons8<2)                 continue;
       toSave=true;
       break;
     }
-  
-  if(!isData && nHardProcGenLeptons>0 && nHardProcGenBosons>0 && keepFullGenInfo_) toSave=true; 
+
+  if(!isData && nHardProcGenLeptons>0 && nHardProcGenBosons>0 && keepFullGenInfo_) toSave=true;
+  if(!isData && skipMCTrigSelection_) toSave=true;
   if(!toSave) return;
-  
+
   //
   // jets
   // https://twiki.cern.ch/twiki/bin/view/CMS/JetID
   // https://twiki.cern.ch/twiki/bin/view/CMS/PileupJetID
   // https://twiki.cern.ch/twiki/bin/view/CMS/GluonTag
-  // 
-  ev.jn=0; ev.pfn=0;
+  //
+  ev.jn=0; ev.jnUnf=0; ev.pfn=0;
   Handle<pat::JetCollection> jetH;
   event.getByLabel( analysisCfg_.getParameter<edm::InputTag>("jetSource"), jetH);
   edm::Handle<edm::ValueMap<float> >  qgTaggerH;
   event.getByLabel("QGTagger","qgLikelihood", qgTaggerH);
   edm::Handle<reco::JetTagCollection> tchpTags,   jpTags,    ssvheTags,    ivfTags,    origcsvTags,    csvTags,    jpcsvTags,    slcsvTags, supercsvTags;
-  event.getByLabel("trackCountingHighPurBJetTags",                  tchpTags);          
-  event.getByLabel("jetProbabilityBJetTags",                        jpTags);            
-  event.getByLabel("simpleSecondaryVertexHighEffBJetTags",          ssvheTags);  
-  event.getByLabel("simpleInclusiveSecondaryVertexHighEffBJetTags", ivfTags); 
-  event.getByLabel("combinedSecondaryVertexBJetTags",               origcsvTags);       
-  event.getByLabel("combinedSecondaryVertexRetrainedBJetTags",      csvTags);           
-  event.getByLabel("combinedCSVJPBJetTags",                         jpcsvTags);         
-  event.getByLabel("combinedCSVSLBJetTags",                         slcsvTags);         
-  event.getByLabel("combinedCSVJPSLBJetTags",                 supercsvTags);      
+  event.getByLabel("trackCountingHighPurBJetTags",                  tchpTags);
+  event.getByLabel("jetProbabilityBJetTags",                        jpTags);
+  event.getByLabel("simpleSecondaryVertexHighEffBJetTags",          ssvheTags);
+  //event.getByLabel("simpleInclusiveSecondaryVertexHighEffBJetTags", ivfTags);
+  event.getByLabel("combinedSecondaryVertexBJetTags",               origcsvTags);
+  event.getByLabel("combinedSecondaryVertexRetrainedBJetTags",      csvTags);
+  event.getByLabel("combinedCSVJPBJetTags",                         jpcsvTags);
+  event.getByLabel("combinedCSVSLBJetTags",                         slcsvTags);
+  event.getByLabel("combinedCSVJPSLBJetTags",                 supercsvTags);
   edm::Handle<std::vector<reco::SecondaryVertexTagInfo> > svTagInfo, ivfTagInfo;
   event.getByLabel("secondaryVertexTagInfos",                        svTagInfo);
   event.getByLabel("inclusiveSecondaryVertexFinderTagInfosFiltered", ivfTagInfo);
@@ -784,8 +826,13 @@ void DataAnalyzer::analyze(const edm::Event &event, const edm::EventSetup &iSetu
     {
       edm::RefToBase<pat::Jet> jetRef(edm::Ref<pat::JetCollection>(jetH,ijet));
       const pat::Jet *jet              = &((*jetH)[ijet]);
+        //if(jet->pt()<10  /*|| !passLooseId*/) continue;
+        if(jet->pt()<10 || fabs(jet->eta())>4.7 /*|| !passLooseId*/) continue;
+
       const reco::Candidate *genParton = jet->genParton();
       const reco::GenJet *genJet       = jet->genJet();
+
+      try{
 
       //pre-selection (note: raw jet energy must be used otherwise you'll have large inefficiencies for |eta|>3!!!!)
       float rawJetEn( jet->correctedJet("Uncorrected").energy() );
@@ -804,7 +851,7 @@ void DataAnalyzer::analyze(const edm::Event &event, const edm::EventSetup &iSetu
 	passTightId  &= (chf>0 && nch>0 && cef<0.99);
       }
       if(jet->pt()<10 || fabs(jet->eta())>4.7 /*|| !passLooseId*/) continue;
-      
+
       //save information
       ev.jn_px[ev.jn]          = jet->px();
       ev.jn_py[ev.jn]          = jet->py();
@@ -830,12 +877,12 @@ void DataAnalyzer::analyze(const edm::Event &event, const edm::EventSetup &iSetu
       ev.jn_tchp[ev.jn]        = (*tchpTags)[ijet].second;
       ev.jn_jp[ev.jn]          = (*jpTags)[ijet].second;
       ev.jn_ssvhe[ev.jn]       = (*ssvheTags)[ijet].second;
-      ev.jn_ivf[ev.jn]         = (*ivfTags)[ijet].second;
-      ev.jn_origcsv[ev.jn]     = (*origcsvTags)[ijet].second;
-      ev.jn_csv[ev.jn]         = (*csvTags)[ijet].second;
-      ev.jn_jpcsv[ev.jn]       = (*jpcsvTags)[ijet].second;
-      ev.jn_slcsv[ev.jn]       = (*slcsvTags)[ijet].second;
-      ev.jn_supercsv[ev.jn]    = (*supercsvTags)[ijet].second;
+      ev.jn_ivf[ev.jn]         = ivfTags.isValid() ? (*ivfTags)[ijet].second : 0;
+      ev.jn_origcsv[ev.jn]     = origcsvTags.isValid() ? (*origcsvTags)[ijet].second : 0;
+      ev.jn_csv[ev.jn]         = csvTags.isValid() ? (*csvTags)[ijet].second : 0;
+      ev.jn_jpcsv[ev.jn]       = jpcsvTags.isValid() ? (*jpcsvTags)[ijet].second : 0;
+      ev.jn_slcsv[ev.jn]       = slcsvTags.isValid() ? (*slcsvTags)[ijet].second : 0;
+      ev.jn_supercsv[ev.jn]    = supercsvTags.isValid() ? (*supercsvTags)[ijet].second : 0;
 
       //secondary vertex from associated tracks
       if(svTagInfo.isValid() && svTagInfo->size()>ijet);
@@ -850,7 +897,7 @@ void DataAnalyzer::analyze(const edm::Event &event, const edm::EventSetup &iSetu
 	ev.jn_svxPy[ev.jn]=0;
 	ev.jn_svxPz[ev.jn]=0;
 	if(nsvtx)
-	  {  
+	  {
 	    for (reco::Vertex::trackRef_iterator titt = sv.secondaryVertex(0).tracks_begin(); titt != sv.secondaryVertex(0).tracks_end(); titt++) ev.jn_svxNtrk[ev.jn]++;
 	    ev.jn_svxLxy[ev.jn]    = sv.flightDistance(0).value();
 	    ev.jn_svxLxyErr[ev.jn] = sv.flightDistance(0).error();
@@ -860,7 +907,7 @@ void DataAnalyzer::analyze(const edm::Event &event, const edm::EventSetup &iSetu
 	    ev.jn_svxPz[ev.jn]     = sv.secondaryVertex(0).p4().pz();
 	  }
       }
-      
+
       //secondary vertex from inclusive tracks
       if(ivfTagInfo.isValid() && ivfTagInfo->size()>ijet)
 	{
@@ -885,8 +932,9 @@ void DataAnalyzer::analyze(const edm::Event &event, const edm::EventSetup &iSetu
 	    }
 	}
 
-      PileupJetIdentifier cutBasedPuIdentifier = cutBasedPuJetIdAlgo_->computeIdVariables(dynamic_cast<const reco::Jet*>(jet), 0, primVtx.get(), *vtxH.product(), true);
-      PileupJetIdentifier puIdentifier         = puJetIdAlgo_->computeIdVariables(dynamic_cast<const reco::Jet*>(jet), 0, primVtx.get(), *vtxH.product(), true);
+      float jec=1./ev.jn_torawsf[ev.jn];
+      PileupJetIdentifier cutBasedPuIdentifier = cutBasedPuJetIdAlgo_->computeIdVariables(dynamic_cast<const reco::Jet*>(jet->originalObject()), jec, primVtx.get(), *vtxH.product(), true);
+      PileupJetIdentifier puIdentifier         = puJetIdAlgo_->computeIdVariables(dynamic_cast<const reco::Jet*>(jet->originalObject()), jec, primVtx.get(), *vtxH.product(), true);
       ev.jn_beta[ev.jn]        = puIdentifier.beta();
       ev.jn_betaStar[ev.jn]    = puIdentifier.betaStar();
       ev.jn_dRMean[ev.jn]      = puIdentifier.dRMean();
@@ -897,7 +945,8 @@ void DataAnalyzer::analyze(const edm::Event &event, const edm::EventSetup &iSetu
       ev.jn_phiW[ev.jn]        = puIdentifier.phiW();
       ev.jn_puMVA[ev.jn]       = puIdentifier.mva();
       ev.jn_qgMVA[ev.jn]       = qgTaggerH.isValid() ? (*qgTaggerH)[jetRef] : 0;
-	
+
+        if ( DEBUG ) cout << " reco Jets:  " << jet->pt() <<"  " << jet->eta() << "   " << passLooseId + passMediumId + passTightId << "   " << uint(cutBasedPuIdentifier.idFlag() & 0xf) << endl;
       //save pf constituents (only for jets with pT>20 in the central region)
       ev.jn_pfstart[ev.jn]=-1;
       ev.jn_pfend[ev.jn]=-1;
@@ -917,13 +966,13 @@ void DataAnalyzer::analyze(const edm::Event &event, const edm::EventSetup &iSetu
 	      ev.pf_d0err[ev.pfn]  = 0;
 	      ev.pf_dZ[ev.pfn]     = 0;
 	      ev.pf_dZerr[ev.pfn]  = 0;
-	      reco::TrackRef track = pfConst[ipf]->trackRef(); 
+	      reco::TrackRef track = pfConst[ipf]->trackRef();
 	      if(!track.isNull()){
 		ev.pf_d0[ev.pfn]    = track->dxy( primVtx->position() );
 		ev.pf_d0err[ev.pfn] = track->dxyError();
 		ev.pf_dZ[ev.pfn]    = track->dz( primVtx->position() );
 		ev.pf_dZerr[ev.pfn] = track->dzError();
-	      } 
+	      }
 	      ev.pfn++;
 	    }
 	  ev.jn_pfend[ev.jn]=ev.pfn-1;
@@ -938,7 +987,45 @@ void DataAnalyzer::analyze(const edm::Event &event, const edm::EventSetup &iSetu
 	| ( ( uint(cutBasedPuIdentifier.idFlag()) & 0xf ) << 7 );
 
       ev.jn++;
+
+      }catch(std::exception &e){
+	cout << "@jet selection "<< e.what() << endl;
+      }
     }
+
+   // additional gen jets :
+   if ( !isData && keepFullGenInfo_ ){
+	edm::Handle<reco::GenJetCollection> genJetsHandle;
+	event.getByLabel("ak5GenJetsNoNu",genJetsHandle);
+	const reco::GenJetCollection* genJetColl = &(*genJetsHandle);
+        reco::GenJetCollection::const_iterator gjeti = genJetColl->begin();
+        if ( DEBUG ) cout << " to gen jets:"<< endl;
+	 for(; gjeti!=genJetColl->end();gjeti++){
+                        reco::GenParticle gjet = *gjeti;
+                        //if(gjet.pt()<=5||gjet.eta()>2.5)continue;
+                        if(gjet.pt()<=10)continue;
+			ev.jn_genUnfjpx[ev.jnUnf]      =  gjet.px();
+      		        ev.jn_genUnfjpy[ev.jnUnf]      =  gjet.py();
+		        ev.jn_genUnfjpz[ev.jnUnf]      =  gjet.pz();
+		        ev.jn_genUnfjen[ev.jnUnf]      =  gjet.energy();
+//            ev.jn_genUnfjhad[ev.jnUnf]     =  gjeti->hadEnergy();
+//            ev.jn_genUnfjem[ev.jnUnf]      =  gjeti->emEnergy();
+
+            bool isChargedJet=false;
+            double chargedFraction = 0.;
+            std::vector<const GenParticle*> mcparticles = gjeti->getGenConstituents();
+            for(std::vector <const GenParticle*>::const_iterator thepart =mcparticles.begin();thepart != mcparticles.end(); ++ thepart ) {
+                if ( (**thepart).charge()!=0 ){
+                    isChargedJet=true;
+                    chargedFraction += (**thepart).pt();
+                }
+            }
+            if ( ! (isChargedJet > 0 ) ) cout << " is chargeid: " << isChargedJet << "   " << chargedFraction/gjet.pt()<<"   " << gjet.pt() <<"    " <<gjet.eta()<< endl;
+	    //            ev.jn_genUnfjptcf[ev.jnUnf]      = chargedFraction/gjet.pt();
+
+			ev.jnUnf++;
+	}
+   }
 
   //
   // missing transverse energy
@@ -949,8 +1036,8 @@ void DataAnalyzer::analyze(const edm::Event &event, const edm::EventSetup &iSetu
     {
       Handle<View<reco::PFMET> > metH;
       event.getByLabel(metSources[imet], metH);
-      ev.met_pt[ev.metn]    = metH.isValid() ? metH->ptrAt(0)->pt() : 0; 
-      ev.met_phi[ev.metn]   = metH.isValid() ? metH->ptrAt(0)->phi() : 0; 
+      ev.met_pt[ev.metn]    = metH.isValid() ? metH->ptrAt(0)->pt() : 0;
+      ev.met_phi[ev.metn]   = metH.isValid() ? metH->ptrAt(0)->phi() : 0;
       ev.met_sigx2[ev.metn] = metH.isValid() ? metH->ptrAt(0)->getSignificanceMatrix()(0,0) : 0;
       ev.met_sigxy[ev.metn] = metH.isValid() ? metH->ptrAt(0)->getSignificanceMatrix()(0,1) : 0;
       ev.met_sigy2[ev.metn] = metH.isValid() ? metH->ptrAt(0)->getSignificanceMatrix()(1,1) : 0;
@@ -958,8 +1045,7 @@ void DataAnalyzer::analyze(const edm::Event &event, const edm::EventSetup &iSetu
       if(metH.isValid() && ev.met_sigx2[ev.metn]<1.e10 && ev.met_sigy2[ev.metn]<1.e10) significance = metH->ptrAt(0)->significance();
       ev.met_sig[ev.metn] = significance;
       ev.metn++;
-    }    
-  
+    }
 
   //
   // charged PF candidates which haven't been clustered
@@ -968,17 +1054,17 @@ void DataAnalyzer::analyze(const edm::Event &event, const edm::EventSetup &iSetu
     for(size_t ipf=0; ipf<pfH->size(); ipf++)
       {
 	const reco::PFCandidate &cand=(*pfH)[ipf];
-	
+
 	//require charged and with track associated
 	if(cand.charge()==0) continue;
 	reco::TrackBaseRef trackBaseRef( cand.trackRef() );
 	if(trackBaseRef.isNull()) continue;
 	float idz( fabs(trackBaseRef->dz( primVtx->position() )) );
 	if(idz>10) continue;
-	
+
 	//minimum pT of 500 MeV
 	if(cand.pt()<0.5) continue;
-	
+
 	//check for overlaps
 	bool matches(false);
 	for(int jpf=0; jpf<ev.pfn; jpf++)
@@ -989,7 +1075,7 @@ void DataAnalyzer::analyze(const edm::Event &event, const edm::EventSetup &iSetu
 	  break;
 	  }
 	if(matches) continue;
-	
+
 	//require it to be associated to the primary vertex
 	int bestVtx(-1);
 	if(trackBaseRef.isAvailable())
@@ -1003,9 +1089,9 @@ void DataAnalyzer::analyze(const edm::Event &event, const edm::EventSetup &iSetu
 		bestDz=vtxDz;
 		bestVtx=jVtx;
 	      }
-	  } 
+	  }
 	if(bestVtx!=0) continue;
-	
+
 	ev.pf_id[ev.pfn]     = cand.pdgId();
 	ev.pf_charge[ev.pfn] = cand.charge();
 	ev.pf_px[ev.pfn]     = cand.px();
@@ -1020,11 +1106,14 @@ void DataAnalyzer::analyze(const edm::Event &event, const edm::EventSetup &iSetu
 	ev.pfn++;
       }
   }
-  
+
   //all done here
   if(saveOnlyLeptons){
     ev.metn=0; ev.gn=0; ev.jn=0; ev.pfn=0;  ev.egn=0;
   }
+
+  ev.checkBoundaries();
+
   summary_.fill();
 }
 
