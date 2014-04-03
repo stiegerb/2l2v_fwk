@@ -19,8 +19,14 @@ TrigAnalysis::TrigAnalysis(edm::ParameterSet runProcess, DataEventSummaryHandler
 	fIsMC = runProcess.getParameter<bool>("isMC");
 
 	// Start monitoring histograms of this analysis
-	mon_->addHistogram( new TH2F ("bjetlxyrespt",   "; L_{xy}(reco)-L_{xy}(B) [cm]; Jet p_{T} [GeV]; Events", 50, -2.5,  2.5, 10, 30., 280.) );
-	mon_->addHistogram( new TH1F ("jetlxy",";L_{xy} [cm]; Jets", 50, 0., 5 ) );
+	TH1F* H_recoChannel = (TH1F*) mon_->addHistogram(
+		new TH1F ("recoChannel", "recoChannel;Channel (reconstructed);Events", 6, 0, 6)) ;
+	TH1F* H_genChannel = (TH1F*) mon_->addHistogram(
+		new TH1F ("genChannel", "genChannel;Channel (generated);Events", 6, 0, 6)) ;
+	TH2F* H_channel = (TH2F*) mon_->addHistogram(
+		new TH2F ("channel", "channel;Channel (generated);Channel (reconstructed);Events",
+			      6, 0, 6, 6, 0, 6)) ;
+
 }
 
 
@@ -178,9 +184,19 @@ TString TrigAnalysis::getGenChannel(){
 	else if( abs(lid1)*abs(lid2) == 13*13 ) channel = "mm";
 
 	if( genLeptonsS3.size() == 2 ) return channel;
-
+	std::cout << " Moooooep " << std::endl;
 	channel = "?";
 	return channel;
+}
+
+int TrigAnalysis::channelToBin(TString channel){
+	if( channel == "had") return 0;
+	if( channel == "e")   return 1;
+	if( channel == "m")   return 2;
+	if( channel == "ee")  return 3;
+	if( channel == "mm")  return 4;
+	if( channel == "em")  return 5;
+	return -1;
 }
 
 //
@@ -204,6 +220,10 @@ void TrigAnalysis::analyze(float weight){
 	if( gench == "?" ){
 		std::cout << " Moooooep " << std::endl;
 	}
+
+	mon_->fillHisto("recoChannel", "all", channelToBin(ch),    weight);
+	mon_->fillHisto("genChannel",  "all", channelToBin(gench), weight);
+	mon_->fillHisto("channel",     "all", channelToBin(gench), channelToBin(ch), weight);
 
 	// //select
 	// bool passEventSelection(true);
@@ -351,6 +371,6 @@ void TrigAnalysis::clearTreeVariables() {
 
 void TrigAnalysis::writeTree(TFile &f) {
 	f.cd();
-	tree_->Print();
+	// tree_->Print();
 	tree_->Write();
 }

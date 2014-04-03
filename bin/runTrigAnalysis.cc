@@ -80,6 +80,12 @@ int main(int argc, char* argv[])
 	//
 	// check input file
 	//
+	TChain *chain = new TChain(baseDir+"/data");
+	for( size_t i = 0; i < urls.size(); ++i ){
+		cout << "Adding file " << TString(urls[i]) << endl;
+		chain->Add(TString(urls[i]));
+	}
+
 	TFile *inF = TFile::Open(url);
 	if(inF==0) return -1;
 	if(inF->IsZombie()) return -1;
@@ -118,10 +124,10 @@ int main(int argc, char* argv[])
 	// control histograms
 	//
 	SmartSelectionMonitor controlHistos;
-	TH1F* Hcutflow      = (TH1F*) controlHistos.addHistogram(new TH1F ("cutflow"    , "cutflow"    ,4,0,4) ) ;
+	TH1F* Hcutflow = (TH1F*) controlHistos.addHistogram(new TH1F ("cutflow", "cutflow", 4, 0, 4)) ;
 
 	//vertex multiplicity
-	controlHistos.addHistogram( new TH1F ("nvertices", "; Vertex multiplicity; Events", 50, 0.,50.) );
+	// controlHistos.addHistogram( new TH1F ("nvertices", "; Vertex multiplicity; Events", 50, 0.,50.) );
 
 	//lepton efficiencies
 	LeptonEfficiencySF lepEff;
@@ -130,7 +136,12 @@ int main(int argc, char* argv[])
 	// process events file
 	//
 	DataEventSummaryHandler evSummary;
-	if( !evSummary.attach( (TTree *) inF->Get(baseDir+"/data") ) )  { inF->Close();  return -1; }
+	if( !evSummary.attach( chain ) )  {
+		cout << "Mooep" << endl;
+		inF->Close();
+		return -1;
+	}
+	// if( !evSummary.attach( (TTree *) inF->Get(baseDir+"/data") ) )  { inF->Close();  return -1; }
 	Int_t entries_to_process = -1;
 	if(maxEvents > 0) entries_to_process = maxEvents;
 	else              entries_to_process = evSummary.getEntries();
@@ -189,7 +200,6 @@ int main(int argc, char* argv[])
 	int nDuplicates(0);
 	for (int inum=0; inum < totalEntries; ++inum){
 		if(inum%500==0) { printf("\r [ %d/100 ]",int(100*float(inum)/float(totalEntries))); cout << flush; }
-		cout << inum << endl;
 		evSummary.getEntry(inum);
 		DataEventSummary &ev = evSummary.getEvent();
 		if(!isMC && duplicatesChecker.isDuplicate( ev.run, ev.lumi, ev.event) ) { nDuplicates++; continue; }
@@ -203,23 +213,6 @@ int main(int argc, char* argv[])
 		}
 
 		if(isV0JetsMC && ev.nup>5) continue;
-
-		//MC truth
-		data::PhysicsObjectCollection_t genParticles=evSummary.getPhysicsObject(DataEventSummaryHandler::GENPARTICLES);
-		bool hasTop(false);
-		int ngenLeptonsStatus3(0);
-		if(isMC){
-			for(size_t igen=0; igen<genParticles.size(); igen++){
-				if(genParticles[igen].get("status")!=3) continue;
-				int absid=abs(genParticles[igen].get("id"));
-				if(absid==6) hasTop=true;
-				if(absid!=11 && absid!=13 && absid!=15) continue;
-				ngenLeptonsStatus3++;
-			}
-
-			if(mcTruthMode==1 && (ngenLeptonsStatus3!=1 || !hasTop)) continue; // mcTruthMode 1 will select events with exactly 1 status 3 lepton and a top
-			if(mcTruthMode==2 && (ngenLeptonsStatus3==0 || !hasTop)) continue; // mcTruthMode 2 will select events with at least 1 status 3 lepton and a top
-		}
 
 		Hcutflow->Fill(1,1);
 		Hcutflow->Fill(2,weightNom);

@@ -35,6 +35,7 @@ public:
 
   TString getRecoChannel(data::PhysicsObjectCollection_t);
   TString getGenChannel();
+  int channelToBin(TString);
 
  private:
 
