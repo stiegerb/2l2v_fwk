@@ -148,7 +148,7 @@ int main(int argc, char* argv[])
 	const Int_t totalEntries = entries_to_process;
 
 
-	TrigAnalysis trigAn(runProcess, &evSummary, controlHistos);
+	TrigAnalysis trigAn(runProcess, &evSummary);
 	trigAn.initializeTreeVariables();
 
 	float cnorm=1.0;

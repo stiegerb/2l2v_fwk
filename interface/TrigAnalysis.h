@@ -3,7 +3,6 @@
 
 #include "FWCore/ParameterSet/interface/ParameterSet.h"
 
-#include "UserCode/llvv_fwk/interface/SmartSelectionMonitor.h"
 #include "UserCode/llvv_fwk/interface/DataEventSummaryHandler.h"
 #include "UserCode/llvv_fwk/interface/MuScleFitCorrector.h"
 
@@ -14,7 +13,7 @@ class TrigAnalysis
 {
 
 public:
-  TrigAnalysis(edm::ParameterSet, DataEventSummaryHandler*, SmartSelectionMonitor&);
+  TrigAnalysis(edm::ParameterSet, DataEventSummaryHandler*);
 
   void analyze(float);
 
@@ -29,9 +28,9 @@ public:
                  float=20., float=2.5);
   void selectLeptons(data::PhysicsObjectCollection_t,
                      data::PhysicsObjectCollection_t&);
-  int selectJets(   data::PhysicsObjectCollection_t,
-                     data::PhysicsObjectCollection_t,
-                     data::PhysicsObjectCollection_t&);
+  int selectJets(data::PhysicsObjectCollection_t,
+                 data::PhysicsObjectCollection_t,
+                 data::PhysicsObjectCollection_t&);
 
   TString getRecoChannel(data::PhysicsObjectCollection_t);
   TString getGenChannel();
@@ -48,22 +47,24 @@ public:
   DataEventSummary fCurrentEvent_;
   TTree* tree_;
 
-  // tree variables
-  float flxy;
-  float flxyerr;
-  float fsecvtxmass;
-  float fsecvtxntrk;
+  void clearTreeVariables();
+
+  // Tree variables
   float fweight;
   int fnvtx;
   int fchannel;
 
-  void clearTreeVariables();
+  int nleps;
+  int lepid[4];
+  float leppt[4];
+  float lepeta[4];
+  float lepphi[4];
 
-
-
-  SmartSelectionMonitor *mon_;
-
-
+  int njets;
+  float jetpt[10];
+  float jeteta[10];
+  float jetphi[10];
+  float jetcsv[10];
 
 };
 
